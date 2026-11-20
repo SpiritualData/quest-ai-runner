@@ -4,9 +4,11 @@ Split out of ``quest_client.py`` by definition; that module re-exports every nam
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
+import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Mapping, Optional
@@ -188,3 +190,80 @@ GOAL_UPDATE_FANOUT_CAP = 40
 # Env var naming the hours to add to "now" as a decision's deadline when the escalation itself
 # specified none. Unset (the default) means no deadline is ever synthesized here.
 QAR_DECISION_DEFAULT_DEADLINE_HOURS_ENV_VAR = "QAR_DECISION_DEFAULT_DEADLINE_HOURS"
+
+
+class TeamCache(dict):
+    """quest_id -> owning team, with an optional on-disk copy shared by one-shot processes.
+
+    A ``tools call`` is a fresh process per shell call, so an in-memory cache never helps it: each call re-resolved the quest's
+    team from ``GET /api/quests/me`` (0.79 MB on the wire, 2026-11-20). With ``QAR_QUEST_CACHE_DIR`` set the answer also lives in
+    ``owning_team.json`` there, keyed by backend and quest, for ``TTL_SECONDS``. Dropping an entry (the quest moved: its cached
+    team failed to serve it) drops it on disk too. Off when the variable is unset, so tests and the long-lived lane are unchanged.
+    """
+    TTL_SECONDS = 6 * 3600.0
+
+    def __init__(self, base_url: str = "") -> None:
+        super().__init__()
+        self.base_url = base_url
+
+    def _file(self) -> Optional[str]:
+        folder = os.environ.get("QAR_QUEST_CACHE_DIR")
+        return os.path.join(folder, "owning_team.json") if folder else None
+
+    def _key(self, quest_id: str) -> str:
+        return f"{self.base_url}|{quest_id}"
+
+    def _read(self) -> Dict[str, Any]:
+        path = self._file()
+        try:
+            with open(path) as f:
+                data = json.load(f)
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError, TypeError):
+            return {}
+
+    def _write(self, data: Dict[str, Any]) -> None:
+        path = self._file()
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp = f"{path}.{os.getpid()}.tmp"
+            with open(tmp, "w") as f:
+                json.dump(data, f)
+            os.replace(tmp, path)
+        except OSError:
+            pass
+
+    def _from_disk(self, quest_id: str) -> Optional[str]:
+        if not self._file():
+            return None
+        row = self._read().get(self._key(quest_id))
+        if isinstance(row, list) and len(row) == 2 and row[0] and time.time() - float(row[1]) < self.TTL_SECONDS:
+            super().__setitem__(quest_id, str(row[0]))
+            return str(row[0])
+        return None
+
+    def get(self, quest_id, default=None):
+        if dict.__contains__(self, quest_id):
+            return dict.__getitem__(self, quest_id)
+        return self._from_disk(quest_id) or default
+
+    def __contains__(self, quest_id) -> bool:
+        return dict.__contains__(self, quest_id) or self._from_disk(quest_id) is not None
+
+    def __setitem__(self, quest_id, team) -> None:
+        super().__setitem__(quest_id, team)
+        if self._file() and team:
+            data = self._read()
+            data[self._key(quest_id)] = [team, time.time()]
+            self._write(data)
+
+    def pop(self, quest_id, *default):
+        team = self.get(quest_id)
+        dict.pop(self, quest_id, None)
+        if self._file():
+            data = self._read()
+            if data.pop(self._key(quest_id), None) is not None:
+                self._write(data)
+        if team is not None:
+            return team
+        return default[0] if default else None

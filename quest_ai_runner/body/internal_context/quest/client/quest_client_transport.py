@@ -133,6 +133,9 @@ _ID_SEGMENT = re.compile(r"\b([a-z]+)_[0-9a-f]{8,}\b")
 _downloads: Dict[str, list] = {}
 _downloads_lock = threading.Lock()
 _downloads_since = [time.monotonic()]
+#: Everything this process downloaded since start (never reset by the periodic report): a ``tools call`` process is one
+#: shell call, too short-lived for the periodic line, so it writes this total once when it exits.
+_process_downloads: Dict[str, list] = {}
 
 
 def endpoint_key(method: str, path: str) -> str:
@@ -153,6 +156,9 @@ def record_download(method: str, path: str, nbytes: int, now: Optional[float] = 
         row = _downloads.setdefault(key, [0, 0])
         row[0] += 1
         row[1] += int(nbytes)
+        total_row = _process_downloads.setdefault(key, [0, 0])
+        total_row[0] += 1
+        total_row[1] += int(nbytes)
         if now - _downloads_since[0] < DOWNLOAD_REPORT_SECONDS:
             return None
         total = sum(r[1] for r in _downloads.values())
@@ -162,6 +168,23 @@ def record_download(method: str, path: str, nbytes: int, now: Optional[float] = 
         _downloads_since[0] = now
     parts = "; ".join(f"{k} x{v[0]} = {v[1] / 1e6:.2f} MB" for k, v in top)
     return f"Quest API downloaded {total / 1e6:.2f} MB in the last {span:.0f}s: {parts}"
+
+def reset_process_downloads() -> None:
+    with _downloads_lock:
+        _process_downloads.clear()
+
+
+def process_download_line(label: str, top: int = 5) -> str:
+    """One accounting line for everything this process downloaded (wire bytes), or "" when it made no request."""
+    with _downloads_lock:
+        rows = sorted(_process_downloads.items(), key=lambda kv: kv[1][1], reverse=True)
+    if not rows:
+        return ""
+    total = sum(r[1] for _, r in rows)
+    count = sum(r[0] for _, r in rows)
+    parts = "; ".join(f"{k} x{v[0]} = {v[1]}" for k, v in rows[:top])
+    return f"tools call {label} downloaded {total} bytes in {count} requests: {parts}"
+
 
 class ProbeCache:
     """What each backend said about itself, once per process. A client is built for every tool call, so the answer lives

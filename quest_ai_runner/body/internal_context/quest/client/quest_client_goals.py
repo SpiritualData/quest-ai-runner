@@ -31,8 +31,8 @@ class GoalsMixin:
         cached = self._quest_team_cache.get(quest_id)
         if cached is not None:
             return cached
-        found = ""
-        for q in self.list_my_quests():
+        found = self.team_from_quest_state(quest_id)
+        for q in ([] if found else self.list_my_quests()):
             qid = str(q.get("quest_id") or q.get("id") or "")
             if qid == quest_id:
                 found = str(q.get("team_id") or "")
@@ -40,6 +40,16 @@ class GoalsMixin:
         if found:
             self._quest_team_cache[quest_id] = found
         return found
+
+    def team_from_quest_state(self, quest_id: str) -> str:
+        """The quest's primary team from ``GET /api/quests/{id}/state`` (``state.team_id``): one quest, about 17 KB on the wire,
+        where the owner-scoped list is every quest of the account (0.79 MB). "" when the quest is not readable that way."""
+        try:
+            payload = self._request("GET", f"/api/quests/{quest_id}/state") or {}
+        except (QuestApiError, QuestNotConfigured):
+            return ""
+        state = payload.get("state") if isinstance(payload, dict) else None
+        return str((state or {}).get("team_id") or "") if isinstance(state, dict) else ""
 
     def forget_owning_team(self, quest_id: str) -> bool:
         """Drop the cached owning team for ``quest_id``; True if there was one.

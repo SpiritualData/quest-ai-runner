@@ -76,6 +76,7 @@ from quest_ai_runner.body.internal_context.adapters_values import Escalation
 from quest_ai_runner.self.interface import EscalationSinkBase
 
 from quest_ai_runner.body.internal_context.quest.client.quest_client_support import (
+    TeamCache,
     QAR_DECISION_DEFAULT_DEADLINE_HOURS_ENV_VAR, QuestApiError, QuestNotConfigured, QuestPendingApproval, QuestWriteError, WriteResult, _PERIOD_RE,
     log)
 from quest_ai_runner.body.internal_context.quest.client.quest_client_transport import TransportMixin
@@ -128,7 +129,7 @@ class QuestClient(TransportMixin, TasksMixin, DecisionsMixin, GoalsMixin, Quests
         # owning_team_for and only when the configured team turns out not to. An entry is
         # dropped the moment the team it names fails to serve the quest, so a quest moved a
         # second time is re-resolved instead of 404ing until the process restarts.
-        self._quest_team_cache: Dict[str, str] = {}
+        self._quest_team_cache: Dict[str, str] = TeamCache(self.base_url)
 
     @property
     def configured(self) -> bool:

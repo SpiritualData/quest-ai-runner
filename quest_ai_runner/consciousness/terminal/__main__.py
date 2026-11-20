@@ -25,10 +25,35 @@ import difflib
 import json
 import os
 import sys
+import time
 from typing import Optional
 
+from quest_ai_runner.body.internal_context.quest.client.quest_client_transport import process_download_line
 from quest_ai_runner.world.tools.tools import ToolContext, build_tool_registry
 from quest_ai_runner.world.tools.tools_status import ACCEPTED_STATUSES, ToolStatus
+
+
+def download_log_path() -> str:
+    """``QAR_TOOL_DOWNLOAD_LOG``, else ``tool_downloads.log`` in the runner's state folder (beside ``lanes/``, so beside every lane.log)."""
+    explicit = os.environ.get("QAR_TOOL_DOWNLOAD_LOG")
+    if explicit:
+        return explicit
+    base = os.environ.get("XDG_STATE_HOME") or os.path.join(os.path.expanduser("~"), ".local", "state")
+    return os.path.join(base, "quest-ai-runner", "tool_downloads.log")
+
+
+def write_download_line(tool: str) -> None:
+    """Append one line (tool, bytes downloaded, top endpoints) so shell tool calls are visible to the data-usage check. Never raises."""
+    try:
+        line = process_download_line(tool)
+        if not line:
+            return
+        path = download_log_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "a") as f:
+            f.write(time.strftime("%Y-%m-%dT%H:%M:%S ") + line + "\n")
+    except Exception:  # noqa: BLE001 -- accounting must never fail a tool call
+        pass
 
 
 def main(argv: Optional[list] = None) -> int:
@@ -100,9 +125,14 @@ def main(argv: Optional[list] = None) -> int:
     except (OSError, ValueError) as e:
         print(f"Bad --args/--kw: {e}", file=sys.stderr)
         return 2
-    result = registry.invoke(args.name, call_args,
-                             ToolContext(quest_id=args.quest, task_id=args.task,
-                                         meta={"run_id": args.run} if args.run else {}))
+    # One shell call = one process: let the owning-team answer outlive it (beside the download log), so the next call asks nobody.
+    os.environ.setdefault("QAR_QUEST_CACHE_DIR", os.path.join(os.path.dirname(download_log_path()), "cache"))
+    try:
+        result = registry.invoke(args.name, call_args,
+                                 ToolContext(quest_id=args.quest, task_id=args.task,
+                                             meta={"run_id": args.run} if args.run else {}))
+    finally:
+        write_download_line(args.name)
     accepted = result.status in ACCEPTED_STATUSES
     stream = sys.stdout if accepted else sys.stderr
     print(result.text, file=stream)

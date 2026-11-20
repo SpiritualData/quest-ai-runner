@@ -267,6 +267,8 @@ def test_list_quest_goals_falls_back_to_the_quests_own_team(monkeypatch):
         urls.append(url)
         if "/api/quests/me" in url:
             return _Resp([{"quest_id": "q1", "team_id": "team-owner"}])
+        if url.endswith("/api/quests/q1/state"):    # the team is read from the one quest, not the account list (0.79 MB)
+            return _Resp({"quest_id": "q1", "state": {"team_id": "team-owner"}})
         if "/api/teams/team-configured/" in url:
             raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
         if "/api/teams/team-owner/" in url:
@@ -283,10 +285,11 @@ def test_list_quest_goals_falls_back_to_the_quests_own_team(monkeypatch):
     assert any("/api/teams/team-owner/" in u for u in urls), "retries on the quest's own team"
 
     # The resolution is cached: a second call must not re-list the owner's quests.
-    before = sum(1 for u in urls if "/api/quests/me" in u)
+    before = sum(1 for u in urls if "/api/quests/me" in u or u.endswith("/state"))
     client.list_quest_goals("q1")
-    after = sum(1 for u in urls if "/api/quests/me" in u)
+    after = sum(1 for u in urls if "/api/quests/me" in u or u.endswith("/state"))
     assert after == before, "the owning team is resolved once, then cached"
+    assert not any("/api/quests/me" in u for u in urls), "the account-wide list is not downloaded for one quest's team"
 
 
 def test_list_quest_goals_honors_an_explicit_team(monkeypatch):
