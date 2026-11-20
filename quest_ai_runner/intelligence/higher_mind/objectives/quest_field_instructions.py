@@ -111,6 +111,11 @@ QUEST_FIELD_ALIASES: Dict[str, str] = {
 }
 
 
+#: Quest renders every goal, habit and collection description as markdown. One rule, shared by the
+#: goal and habit instructions (and any new item kind that has a description) so it is written once.
+DESCRIPTION_MARKDOWN_RULE = ("The description renders markdown: a short lead sentence, then `- ` lists and **bold** "
+                             "for the key words, kept short enough to read at a glance.")
+
 GOAL_INSTRUCTIONS = FieldInstruction(
     key="goal",
     label="Goal",
@@ -132,6 +137,7 @@ GOAL_INSTRUCTIONS = FieldInstruction(
         "period is split, not stretched.",
         "No duplicates: if an open goal with the same intent exists in that period, do not add "
         "another.",
+        DESCRIPTION_MARKDOWN_RULE,
     ),
     good=("Publish 2 breathwork videos and reply to every comment within 24 hours "
           "(criteria: 2 videos live by Sunday, 0 unanswered comments older than 24h).",),
@@ -186,6 +192,7 @@ HABIT_INSTRUCTIONS = FieldInstruction(
         "Attach it to the strategy it serves and, when there is one, the goal its entries count "
         "toward.",
         "Never add a habit that duplicates an existing one or conflicts with stated time limits.",
+        DESCRIPTION_MARKDOWN_RULE,
     ),
     good=("Run 30 min easy pace, Mon, Wed, Fri at 6:30am.",),
     bad=("Exercise regularly.",),
