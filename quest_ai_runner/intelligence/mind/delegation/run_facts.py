@@ -49,7 +49,8 @@ def stop_decision_of(end_reason: str, left: str = "") -> Optional[Dict[str, Any]
     """The hub's own decision to stop, as Quest stores it, read from how the run ended; None when the end reason names no decision (a finished run, a
     cancel, a soft-limit wrap-up that does not say which ceiling)."""
     head, _, tail = str(end_reason or "").partition(":")
-    reason = tail if head == "resume_stopped" else HARD_LIMIT_REASONS.get(tail) if head == "stopped_at_hard_limit" else ""
+    # ``resume_stopped``: the hub's own iteration was refused; ``unmet_stopped``: the goal is not met and its rounds stopped on a budget or a blocker (the answer check gave up)
+    reason = tail if head in ("resume_stopped", "unmet_stopped") else HARD_LIMIT_REASONS.get(tail) if head == "stopped_at_hard_limit" else ""
     if not reason or not CODE.match(reason):
         return None
     out: Dict[str, Any] = {"continue": False, "reason": reason}

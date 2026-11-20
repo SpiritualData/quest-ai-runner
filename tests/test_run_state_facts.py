@@ -183,6 +183,7 @@ def test_a_finished_run_offers_no_resume_and_an_unreported_spend_is_left_out():
 
 def test_a_stop_decision_is_made_only_for_an_end_that_names_one():
     assert stop_decision_of("resume_stopped:resume_limit") == {"continue": False, "reason": "resume_limit"}
+    assert stop_decision_of("unmet_stopped:answer_stalled") == {"continue": False, "reason": "answer_stalled"}
     assert stop_decision_of("stopped_at_hard_limit:time") == {"continue": False, "reason": "ceiling_time"}
     assert stop_decision_of("wrapped_up_at_soft_limit") is None and stop_decision_of("met") is None
 
