@@ -2132,12 +2132,12 @@ def test_cancel_and_pause_checks_ask_for_the_slim_task():
     assert seen == [{"slim": True}]   # one slim read serves both checks within the window
 
 
-def test_get_task_slim_sends_the_flag_and_default_does_not(monkeypatch):
+def test_get_task_is_slim_by_default_and_full_only_when_asked(monkeypatch):
     from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
     urls = []
     c = QuestClient("http://quest.example", "qsk_test")
     monkeypatch.setattr(c, "_request", lambda method, path, **kw: urls.append((path, kw.get("params"))) or {})
     c.get_task("t1")
-    c.get_task("t1", slim=True)
-    assert urls == [("/api/assistant-tasks/t1", None), ("/api/assistant-tasks/t1", {"slim": "true"})]
+    c.get_task("t1", slim=False)
+    assert urls == [("/api/assistant-tasks/t1", {"slim": "true"}), ("/api/assistant-tasks/t1", None)]
