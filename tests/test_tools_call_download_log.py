@@ -36,3 +36,11 @@ def test_main_appends_the_line_to_the_log_file(monkeypatch, tmp_path):
     text = log_file.read_text()
     assert "list_asks downloaded 2325 bytes in 1 requests" in text and "GET /api/asks x1 = 2325" in text
     assert text.count("\n") == 1
+
+
+def test_tests_never_write_the_real_download_log(monkeypatch, tmp_path):
+    """Evidence 2026-11-20: two fake 'tools call echo' lines sat in the real log. The suite's default path is a temp file."""
+    import os
+    real = os.path.join(os.path.expanduser("~"), ".local", "state", "quest-ai-runner", "tool_downloads.log")
+    assert tools_main.download_log_path() != real
+    assert str(tmp_path) in tools_main.download_log_path()

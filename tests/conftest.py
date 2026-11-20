@@ -41,6 +41,21 @@ def quest_capability_cache_starts_empty():
 
 
 @pytest.fixture(autouse=True)
+def quest_read_cache_starts_empty():
+    """The per-process Quest read cache (and its shared task-list etags) never carries one test's answers into another."""
+    from quest_ai_runner.body.internal_context.quest.client.quest_client_read_cache import READ_CACHE
+    READ_CACHE.clear()
+    yield
+    READ_CACHE.clear()
+
+
+@pytest.fixture(autouse=True)
+def tool_download_log_stays_in_a_temp_file(monkeypatch, tmp_path, hermetic_qar_environment):
+    """A test that runs ``tools call`` never appends to the real per-user ``tool_downloads.log`` (a fake 5 MB line landed there once)."""
+    monkeypatch.setenv("QAR_TOOL_DOWNLOAD_LOG", str(tmp_path / "tool_downloads.log"))
+
+
+@pytest.fixture(autouse=True)
 def chat_log_stays_in_a_temp_file(monkeypatch, tmp_path, hermetic_qar_environment):
     """A test that mounts the terminal app never writes the real per-user chat log."""
     monkeypatch.setenv("QAR_CHAT_LOG_FILE", str(tmp_path / "chat.log"))

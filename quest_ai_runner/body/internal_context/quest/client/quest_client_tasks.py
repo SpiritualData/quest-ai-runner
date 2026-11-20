@@ -38,10 +38,19 @@ class TasksMixin:
         returns the copy kept from last time. A server that does not know etags answers a normal list, which is returned as before.
         The key leaves out ``due_before``, which is the current time and differs on every call. Raises like ``_request``."""
         import copy
-        import json
-        cache = self.__dict__.setdefault("task_list_cache", {})
-        key = json.dumps({k: v for k, v in params.items() if k != "due_before"}, sort_keys=True, default=str)
-        entry = cache.get(key)
+        from quest_ai_runner.body.internal_context.quest.client import quest_client_read_cache as read_cache
+        cache = read_cache.READ_CACHE
+        scope = cache.scope_of(self)
+        key = cache.task_key(scope, params)       # the etag memory is per process: a client built per run or per tool call keeps it
+        goal_id = params.get("goal_id")
+        use_ttl = read_cache.enabled() and isinstance(goal_id, str) and bool(goal_id)
+        if use_ttl:
+            # A goal's task list changes whenever a running task logs progress, so the etag rarely matches inside a run and every repeat
+            # re-downloaded it (1 MB). A repeat within the TTL, with no task create or status change by this process, reuses the answer.
+            hit, cached, _ = cache.lookup(self, key, "tasks", goal_id)
+            if hit:
+                return cached
+        entry = cache.get_etag(scope, key)
         asked = dict(params)
         if entry:
             asked["if_none_match"] = entry[0]
@@ -49,13 +58,12 @@ class TasksMixin:
             asked["want_etag"] = "true"
         resp = self._request("GET", "/api/assistant-tasks", params=asked)
         if entry and isinstance(resp, dict) and resp.get("unchanged"):
-            return copy.deepcopy(entry[1])
-        tasks = _as_task_list(resp)
-        etag = resp.get("etag") if isinstance(resp, dict) else None
-        if etag:
-            cache[key] = (str(etag), copy.deepcopy(tasks))
+            tasks = copy.deepcopy(entry[1])
         else:
-            cache.pop(key, None)
+            tasks = _as_task_list(resp)
+            cache.set_etag(scope, key, resp.get("etag") if isinstance(resp, dict) else None, tasks)
+        if use_ttl:
+            cache.store(key, "tasks", frozenset({goal_id}), tasks, None)
         return tasks
 
     def discover_due(self, *, now: Optional[datetime] = None,

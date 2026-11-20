@@ -39,6 +39,7 @@ import uuid
 from typing import Any, Dict, FrozenSet, Mapping, Optional
 
 from quest_ai_runner.body.internal_context.quest.client.quest_client_connection import open_url   # keep-alive; tests patch it here
+from quest_ai_runner.body.internal_context.quest.client import quest_client_read_cache as read_cache
 from quest_ai_runner.world.tools.tools_status import ToolStatus
 from quest_ai_runner.body.internal_context.quest.client.quest_client_support import (
     QuestApiError, QuestNotConfigured, QuestWriteError, WriteResult, log, parse_retry_after)
@@ -400,6 +401,32 @@ class TransportMixin:
 
     def _request(self, method: str, path: str, *, params: Optional[Dict[str, Any]] = None,
                  body: Optional[Dict[str, Any]] = None, timeout_override: Optional[float] = None) -> Any:
+        """One call to Quest. A repeat of a quest-scoped read is answered from the per-process read cache while it is still valid, and a
+        write by this process drops what it may have changed first (``quest_client_read_cache``)."""
+        if not read_cache.enabled() or timeout_override:
+            return self.request_over_wire(method, path, params=params, body=body, timeout_override=timeout_override)
+        cache = read_cache.READ_CACHE
+        if method != "GET":
+            cache.note_write(method, path, body)
+            try:
+                return self.request_over_wire(method, path, params=params, body=body, timeout_override=timeout_override)
+            finally:
+                cache.note_write(method, path, body)     # a write that failed after being applied must not leave a stale read behind
+        kind = cache.classify(path, params)
+        if kind is None or missing_id_segment(path) is not None:
+            return self.request_over_wire(method, path, params=params, body=body, timeout_override=timeout_override)
+        self._require()
+        key = (cache.scope_of(self), path, read_cache._clean(params))
+        hit, payload, token = cache.lookup(self, key, kind[0], kind[1])
+        if hit:
+            return payload
+        payload = self.request_over_wire(method, path, params=params, body=body, timeout_override=timeout_override)
+        if payload is not None:
+            cache.store(key, kind[0], frozenset({kind[1]}), payload, token)
+        return payload
+
+    def request_over_wire(self, method: str, path: str, *, params: Optional[Dict[str, Any]] = None,
+                          body: Optional[Dict[str, Any]] = None, timeout_override: Optional[float] = None) -> Any:
         missing = missing_id_segment(path)
         if missing is not None:     # "" (an empty segment) is a missing id too
             # A caller passed no id (Python formats None as "None"): refuse here, naming the path, rather than ask Quest for
