@@ -47,14 +47,14 @@ def test_partials_are_still_skipped():
     assert posts == []
 
 
-def test_structured_ticks_post_at_once_and_none_are_merged_away():
+def test_discrete_ticks_post_at_once_and_none_are_merged_away():
     now = [100.0]
     sink, posts = make(now)
     sink.update(ev("step 1"), None)                       # posted, opens the window
-    for kind in ("agent", "agent", "spend", "structure", "stop_decision", "milestone", "decision", "tokens"):
+    for kind in ("agent", "agent", "stop_decision", "milestone", "decision"):
         sink.update(ev(kind, kind), None)
         now[0] += 0.5
-    assert [k for k, _ in posts] == ["exec", "agent", "agent", "spend", "structure", "stop_decision", "milestone", "decision", "tokens"]
+    assert [k for k, _ in posts] == ["exec", "agent", "agent", "stop_decision", "milestone", "decision"]
 
 
 def test_a_held_back_step_goes_out_before_the_structured_tick_that_follows_it():
@@ -95,3 +95,32 @@ def test_the_executor_polls_flush_due_from_its_stop_checks():
     def broken():
         raise RuntimeError("post failed")
     assert polling_check(lambda: True, broken)() is True       # a failing post never affects the stop check
+
+
+def test_snapshot_ticks_are_coalesced_per_kind_latest_wins_and_discrete_ticks_stay_immediate():
+    """spend/structure/tokens are snapshots (structure every 2 s, spend every 4 s per task = ~225 posts per 5 min):
+    one post per kind per window, the latest wins. Agent, stop_decision, milestone, decision, done, error stay immediate."""
+    now = [100.0]
+    sink, posts = make(now)
+    for i in range(60):                                   # a minute of a busy run
+        sink.update(ev(f"s{i}", "structure"), None)
+        sink.update(ev(f"p{i}", "spend"), None)
+        sink.update(ev(f"t{i}", "tokens"), None)
+        now[0] += 1
+    snapshot_posts = [p for p in posts if p[0] in ("structure", "spend", "tokens")]
+    assert len(snapshot_posts) <= 3 * 5                   # at most one per kind per 15 s window
+    assert posts[-1] != ("structure", "s0") and ("structure", "s0") in posts
+    sink.update(ev("helper", "agent"), None)
+    sink.update(ev("stop", "stop_decision"), None)
+    assert posts[-2:] == [("agent", "helper"), ("stop_decision", "stop")]
+
+
+def test_flush_posts_the_latest_of_every_held_back_kind():
+    now = [100.0]
+    sink, posts = make(now)
+    sink.update(ev("a", "structure"), None)
+    sink.update(ev("b", "structure"), None)
+    sink.update(ev("c", "spend"), None)
+    assert posts == [("structure", "a")]
+    sink.flush()
+    assert posts == [("structure", "a"), ("structure", "b"), ("spend", "c")]
