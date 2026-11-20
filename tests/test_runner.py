@@ -586,7 +586,7 @@ def test_quest_client_progress_url_keeps_colon_for_team_conv_id(monkeypatch):
         captured["body"] = req.data
         return _Resp()
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
 
     client = QuestClient("http://quest.example", "qsk_test")
     out = client.post_conversation_message("team:abc123", "Started working on this", kind="started")
@@ -617,7 +617,7 @@ def test_quest_client_progress_url_same_shape_for_qaconv_id(monkeypatch):
         captured["url"] = req.full_url
         return _Resp()
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
 
     client = QuestClient("http://quest.example", "qsk_test")
     client.post_conversation_message("qaconv_xyz", "progress", kind="progress")
@@ -1465,7 +1465,7 @@ def test_claim_includes_handler_in_patch_body(monkeypatch):
         captured["body"] = req.data
         return _Resp()
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
 
     client = QuestClient("http://quest.example", "qsk_test")
     client.claim("t1", handler="alex")
@@ -1492,7 +1492,7 @@ def test_claim_without_handler_omits_it(monkeypatch):
         captured["body"] = req.data
         return _Resp()
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
 
     client = QuestClient("http://quest.example", "qsk_test")
     client.claim("t1")
@@ -1519,7 +1519,7 @@ def test_report_progress_posts_to_right_path_and_body(monkeypatch):
         captured["body"] = req.data
         return _Resp()
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
 
     client = QuestClient("http://quest.example", "qsk_test")
     out = client.report_progress("t1", "exec", text="ran step 2", output="raw")
@@ -1541,7 +1541,7 @@ def test_report_progress_swallows_http_errors(monkeypatch):
     def _boom_urlopen(req, timeout=None):
         raise urllib.error.HTTPError(req.full_url, 500, "boom", hdrs=None, fp=None)
 
-    monkeypatch.setattr(urllib.request, "urlopen", _boom_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _boom_urlopen)
 
     client = QuestClient("http://quest.example", "qsk_test")
     # Must not raise, and returns {} on failure.
@@ -1960,7 +1960,7 @@ def test_post_conversation_message_includes_task_id_when_given(monkeypatch):
         captured["body"] = req.data
         return _Resp()
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
 
     client = QuestClient("http://quest.example", "qsk_test")
     client.post_conversation_message("qaconv_1", "hello", kind="progress", task_id="task-99")
@@ -1986,7 +1986,7 @@ def test_post_conversation_message_omits_task_id_when_absent(monkeypatch):
         captured["body"] = req.data
         return _Resp()
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
 
     client = QuestClient("http://quest.example", "qsk_test")
     client.post_conversation_message("qaconv_1", "hello", kind="progress")

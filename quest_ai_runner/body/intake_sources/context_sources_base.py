@@ -105,7 +105,8 @@ def _runs_delivered(request: "CollectRequest", autopilot_id: str = "") -> List[d
     key = f"tasks:{request.card_id}"
     if key not in request.cache:
         try:
-            request.cache[key] = list(lister(goal_id=request.card_id) or [])
+            # Only status, result and dates are read below, never the progress log (8.37 MB a call unfiltered, 2026-11-20).
+            request.cache[key] = list(lister(goal_id=request.card_id, without_progress=True) or [])
         except Exception as e:  # noqa: BLE001 -- history is context, never a reason to fail
             log.info("context updates: could not read tasks for %s (%s)", request.card_id, e)
             request.cache[key] = []

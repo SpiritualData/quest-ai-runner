@@ -31,13 +31,13 @@ def test_request_asks_for_gzip_and_decodes_a_gzip_reply(monkeypatch):
         seen["accept"] = req.get_header("Accept-encoding")
         return _Resp(gzip.compress(json.dumps(body).encode()), {"Content-Encoding": "gzip"})
 
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", fake)
     assert _client()._request("GET", "/api/assistant-tasks") == body
     assert seen["accept"] == "gzip"
 
 
 def test_a_plain_reply_from_a_server_that_does_not_compress_still_reads(monkeypatch):
-    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: _Resp(b'{"ok": true}', {}))
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", lambda req, timeout=None: _Resp(b'{"ok": true}', {}))
     assert _client()._request("GET", "/api/quests/me") == {"ok": True}
 
 
@@ -54,7 +54,7 @@ def test_a_gzipped_error_reply_keeps_its_message_and_code(monkeypatch):
     def fake(req, timeout=None):
         raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", hdrs, io.BytesIO(payload))
 
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", fake)
     try:
         _client()._request("GET", "/api/quests/me")
     except QuestApiError as e:

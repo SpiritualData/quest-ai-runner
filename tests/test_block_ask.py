@@ -33,7 +33,7 @@ def routed(monkeypatch, routes):
                 return FakeResponse(status, body)
         raise urllib.error.HTTPError(req.full_url, 404, "nope", {}, io.BytesIO(b"{}"))
 
-    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", fake)
     return seen
 
 

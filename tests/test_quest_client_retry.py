@@ -2,6 +2,7 @@
 writes retried only under an Idempotency-Key and only when the backend is known to honour it, a configurable
 timeout, and a one-time capability probe that degrades quietly. A scripted transport stands in for the network
 (no sockets, no real sleeping)."""
+from quest_ai_runner.body.internal_context.quest.client import quest_client_transport
 import logging
 import urllib.error
 
@@ -286,7 +287,7 @@ def test_many_clients_probe_a_backend_once_per_process(monkeypatch):
         later, _unused = make_client([(201, {"id": "g1"})], monkeypatch)
         later.base_url = first.base_url
         import urllib.request
-        monkeypatch.setattr(urllib.request, "urlopen", transport)
+        monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", transport)
         later.create_goal("Walk", period="2026-08-18", quest_id="q1")
     health = [r for r in transport.requests if r[1] == "/api/health"]
     assert len(health) == 1 and len(transport.requests) == 7
@@ -334,13 +335,13 @@ def timed_client(monkeypatch, steps, **settings):
     now = [0.0]
     client.clock = lambda: now[0]
     client.sleep = lambda seconds: now.__setitem__(0, now[0] + seconds)
-    real = urllib.request.urlopen
+    real = quest_client_transport.open_url
 
     def attempt(req, timeout=None):
         now[0] += timeout or 0
         return real(req, timeout=timeout)
 
-    monkeypatch.setattr(urllib.request, "urlopen", attempt)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", attempt)
     return client, transport, now
 
 

@@ -1,4 +1,5 @@
 """quest_goal_sync — GOALS.md <-> a quest's goal ladder, against a MOCK client. No network."""
+from quest_ai_runner.body.internal_context.quest.client import quest_client_transport
 import tempfile
 from pathlib import Path
 
@@ -272,7 +273,7 @@ def test_list_quest_goals_falls_back_to_the_quests_own_team(monkeypatch):
             return _Resp({"quest_id": "q1", "period_groups": [{"goals": [{"id": "g1"}]}]})
         raise AssertionError(f"unexpected url {url}")
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
 
     client = QuestClient("http://quest.example", "qsk_test", team_id="team-configured")
     data = client.list_quest_goals("q1")
@@ -301,7 +302,7 @@ def test_list_quest_goals_honors_an_explicit_team(monkeypatch):
         urls.append(req.full_url)
         raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
 
     client = QuestClient("http://quest.example", "qsk_test", team_id="team-configured")
     assert client.list_quest_goals("q1", team_id="team-explicit") == {}
@@ -343,7 +344,7 @@ def goal_client_with_moving_quest(monkeypatch, urls, owner_team):
             return FakeResp({"quest_id": "q1", "period_groups": [{"goals": [{"id": "g1"}]}]})
         raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
 
-    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", fake_urlopen)
     return QuestClient("http://quest.example", "qsk_test", team_id="team-configured")
 
 
@@ -401,7 +402,7 @@ def test_list_quest_goals_re_resolves_at_most_once_per_call(monkeypatch):
     # The quest leaves team-owner; the quest list now says team-stale, but that team 404s too
     # (the list lags the move).
     owner[0] = "team-unlisted"
-    real_urlopen = urllib.request.urlopen
+    real_urlopen = quest_client_transport.open_url
 
     def lagging(req, timeout=None):
         if "/api/quests/me" in req.full_url:
@@ -420,7 +421,7 @@ def test_list_quest_goals_re_resolves_at_most_once_per_call(monkeypatch):
             return LaggingResp()
         return real_urlopen(req, timeout=timeout)
 
-    monkeypatch.setattr(urllib.request, "urlopen", lagging)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", lagging)
     before = len(urls)
     assert client.list_quest_goals("q1") == {}
     tail = urls[before:]

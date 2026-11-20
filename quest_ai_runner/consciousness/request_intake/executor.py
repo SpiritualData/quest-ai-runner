@@ -571,23 +571,26 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
             pass
         def run_once(brief: str, resume: Optional[str],
                      extra: Optional[Dict[str, Any]] = None) -> OrchestratorResult:
-            return self._orch.run(
-                brief, quest_id=quest_id, context_view=context_view, mode=Mode.BACKGROUND,
-                sink=sink, model_hint=model_hint, rep_preamble=rep_preamble,
-                context_meta=context_meta, working_dir_override=working_dir_override,
-                conv_id=conv_id, conv_scope=conv_scope or None, cancel_check=cancel_check,
-                pending_inputs=pending_inputs,
-                # ACROSS-RUN CONTINUITY: the thread's previous session, if the backend sent one.
-                # It rides the SAME plumbing as the within-run turn-budget continuation (the deep
-                # loop's ``resume_session``, forwarded to a runner that accepts it), so there is one
-                # resume path, not two. None = today's cold start, byte-for-byte.
-                resume_session_id=resume,
-                # This text is a QUEUED TASK's brief, not something the human typed at us this
-                # turn, so the user-veto gate must not read it. See the no-action gate in
-                # Orchestrator.run: a work brief full of legitimate instructions ("stop asking",
-                # "do not silently drop them") otherwise degrades the run to an answer with no
-                # tools, and it reports as though it had looked.
-                message_is_user_turn=False, **control_kwargs, **(extra or {}))
+            try:
+                return self._orch.run(
+                    brief, quest_id=quest_id, context_view=context_view, mode=Mode.BACKGROUND,
+                    sink=sink, model_hint=model_hint, rep_preamble=rep_preamble,
+                    context_meta=context_meta, working_dir_override=working_dir_override,
+                    conv_id=conv_id, conv_scope=conv_scope or None, cancel_check=cancel_check,
+                    pending_inputs=pending_inputs,
+                    # ACROSS-RUN CONTINUITY: the thread's previous session, if the backend sent one.
+                    # It rides the SAME plumbing as the within-run turn-budget continuation (the deep
+                    # loop's ``resume_session``, forwarded to a runner that accepts it), so there is one
+                    # resume path, not two. None = today's cold start, byte-for-byte.
+                    resume_session_id=resume,
+                    # This text is a QUEUED TASK's brief, not something the human typed at us this
+                    # turn, so the user-veto gate must not read it. See the no-action gate in
+                    # Orchestrator.run: a work brief full of legitimate instructions ("stop asking",
+                    # "do not silently drop them") otherwise degrades the run to an answer with no
+                    # tools, and it reports as though it had looked.
+                    message_is_user_turn=False, **control_kwargs, **(extra or {}))
+            finally:
+                sink.flush()   # the throttle's held-back last event, posted before the terminal report
 
         decisions_before = self._open_decision_ids(quest_id)
         try:

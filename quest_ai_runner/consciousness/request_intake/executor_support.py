@@ -5,6 +5,8 @@ Split out of ``executor.py`` by definition; that module re-exports every name he
 from __future__ import annotations
 
 import inspect
+import threading
+import time
 from typing import Any, Callable, Dict, List, Optional
 from dataclasses import dataclass
 
@@ -14,6 +16,10 @@ from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorResult
 from hubofhubs.api import ProgressEvent
 from quest_ai_runner.intelligence.critical_thinking.metric_translation.goal_metrics import deep_metric_data
 from quest_ai_runner.consciousness.request_intake.executor_contracts import log
+
+
+# The task's live progress stream takes at most one post per this many seconds (the latest event wins, the last is flushed).
+PROGRESS_POST_INTERVAL_SECONDS = 15.0
 
 
 # Same throttle, same reasoning, for the ``pending_inputs`` callable built by
@@ -297,11 +303,32 @@ class _TaskProgressSink:
     """
     _SKIP = frozenset({"partial"})
 
-    def __init__(self, task_id: str, report_fn: Callable, on_milestone: Optional[Callable], goal: str = ""):
+    def __init__(self, task_id: str, report_fn: Callable, on_milestone: Optional[Callable], goal: str = "",
+                 min_interval: float = PROGRESS_POST_INTERVAL_SECONDS, clock: Callable[[], float] = time.monotonic):
         self._goal = goal
         self._task_id = task_id
         self._report = report_fn
         self._on_milestone = on_milestone
+        self._min_interval = min_interval
+        self._clock = clock
+        self._last_post: Optional[float] = None
+        self._pending: Optional[tuple] = None     # the latest event held back since the last post: (type, text, data)
+        self._lock = threading.Lock()
+
+    def _post(self, kind: str, text: Optional[str], data: Any) -> None:
+        try:
+            self._report(self._task_id, kind, text=text, data=data)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def flush(self) -> None:
+        """Post the event held back by the throttle, if any (the run is over, or its last word must not be lost)."""
+        with self._lock:
+            pending, self._pending = self._pending, None
+            if pending is not None:
+                self._last_post = self._clock()
+        if pending is not None:
+            self._post(*pending)
 
     def update(self, event: ProgressEvent, mode) -> None:
         if event.type in self._SKIP:
@@ -311,7 +338,16 @@ class _TaskProgressSink:
             data = event.data
             if description:
                 data = {**(data if isinstance(data, dict) else {}), "description": description}
-            self._report(self._task_id, event.type, text=event.text, data=data)
+            # At most one post per interval per task, the latest event wins: a run emitted about one a second (248 posts, 5 minutes).
+            with self._lock:
+                now = self._clock()
+                due = self._last_post is None or now - self._last_post >= self._min_interval
+                if due:
+                    self._last_post, self._pending = now, None
+                else:
+                    self._pending = (event.type, event.text, data)
+            if due:
+                self._post(event.type, event.text, data)
         except Exception:  # noqa: BLE001
             pass
         try:

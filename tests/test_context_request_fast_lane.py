@@ -348,7 +348,7 @@ def test_quest_client_wait_for_interactive_builds_url_and_pads_timeout(monkeypat
         captured["timeout"] = timeout
         return _Resp()
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
 
     client = QuestClient("http://quest.example", "qsk_test", team_id="team1")
     task = client.wait_for_interactive(env_id="env-A", timeout=20.0)
@@ -378,7 +378,7 @@ def test_quest_client_wait_for_interactive_empty_wait_returns_none(monkeypatch):
         def read(self):
             return json.dumps({"task": None}).encode()
 
-    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: _Resp())
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", lambda req, timeout=None: _Resp())
 
     client = QuestClient("http://quest.example", "qsk_test", team_id="team1")
     assert client.wait_for_interactive(timeout=5.0) is None
@@ -393,7 +393,7 @@ def test_quest_client_wait_for_interactive_never_raises_on_transport_error(monke
     def _boom(req, timeout=None):
         raise urllib.error.URLError("no route to host")
 
-    monkeypatch.setattr(urllib.request, "urlopen", _boom)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _boom)
     client = QuestClient("http://quest.example", "qsk_test", team_id="team1")
     assert client.wait_for_interactive(timeout=5.0) is None
 
@@ -420,7 +420,7 @@ def test_quest_client_list_interactive_due_builds_url(monkeypatch):
         captured["url"] = req.full_url
         return _Resp()
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
     client = QuestClient("http://quest.example", "qsk_test", team_id="team1")
     client.list_interactive_due(env_id="env-B")
     assert "real_time=true" in captured["url"]
@@ -450,7 +450,7 @@ def test_quest_client_discover_due_includes_env_id(monkeypatch):
         captured["url"] = req.full_url
         return _Resp()
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
     client = QuestClient("http://quest.example", "qsk_test", team_id="team1")
     client.discover_due(now=datetime(2026, 1, 1, tzinfo=timezone.utc), env_id="env-C")
     assert "env_id=env-C" in captured["url"]
@@ -478,7 +478,7 @@ def test_quest_client_report_done_with_data_omits_result_data_when_empty(monkeyp
         captured["body"] = json.loads(req.data.decode())
         return _Resp()
 
-    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", _fake_urlopen)
     client = QuestClient("http://quest.example", "qsk_test", team_id="team1")
 
     client.report_done_with_data("t1", "plain text result")

@@ -55,7 +55,7 @@ class Transport:
 def make_client(steps, monkeypatch, **settings):
     """A client wired to a scripted transport and a recording sleep (no real waiting, no random jitter)."""
     transport = Transport(steps)
-    monkeypatch.setattr(urllib.request, "urlopen", transport)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", transport)
     client = QuestClient("https://quest.example", "test-api-key", team_id="team_1", **settings)
     client.sleeps = []
     client.sleep = client.sleeps.append

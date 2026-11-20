@@ -38,6 +38,7 @@ import urllib.request
 import uuid
 from typing import Any, Dict, FrozenSet, Mapping, Optional
 
+from quest_ai_runner.body.internal_context.quest.client.quest_client_connection import open_url   # keep-alive; tests patch it here
 from quest_ai_runner.world.tools.tools_status import ToolStatus
 from quest_ai_runner.body.internal_context.quest.client.quest_client_support import (
     QuestApiError, QuestNotConfigured, QuestWriteError, WriteResult, log, parse_retry_after)
@@ -313,7 +314,7 @@ class TransportMixin:
         if key:
             req.add_header(IDEMPOTENCY_HEADER, key)
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with open_url(req, timeout=timeout) as resp:
                 raw = resp.read()
                 line = record_download(method, path, len(raw), query_names=params.keys() if params else None)
                 if str((getattr(resp, "headers", None) or {}).get("Content-Encoding", "")).lower() == "gzip" and raw:

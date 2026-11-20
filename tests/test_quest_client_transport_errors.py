@@ -21,7 +21,7 @@ def test_request_wraps_socket_timeout_as_quest_api_error(monkeypatch):
     def raising_urlopen(req, timeout=None):
         raise TimeoutError("The read operation timed out")
 
-    monkeypatch.setattr(urllib.request, "urlopen", raising_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", raising_urlopen)
     with pytest.raises(QuestApiError, match="transport error"):
         make_client()._request("GET", "/api/assistant-tasks")
 
@@ -30,7 +30,7 @@ def test_request_wraps_connection_reset_as_quest_api_error(monkeypatch):
     def raising_urlopen(req, timeout=None):
         raise ConnectionResetError("Connection reset by peer")
 
-    monkeypatch.setattr(urllib.request, "urlopen", raising_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", raising_urlopen)
     with pytest.raises(QuestApiError, match="transport error"):
         make_client()._request("GET", "/api/assistant-tasks")
 
@@ -39,14 +39,14 @@ def test_wait_for_interactive_swallows_socket_timeout(monkeypatch):
     def raising_urlopen(req, timeout=None):
         raise TimeoutError("The read operation timed out")
 
-    monkeypatch.setattr(urllib.request, "urlopen", raising_urlopen)
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", raising_urlopen)
     # The documented contract: an empty/timed-out/errored wait returns None, never raises.
     assert make_client().wait_for_interactive(timeout=0.1) is None
 
 
 def test_a_path_with_no_id_is_refused_before_sending(monkeypatch):
     sent = []
-    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=None: sent.append(req))
+    monkeypatch.setattr("quest_ai_runner.body.internal_context.quest.client.quest_client_transport.open_url", lambda req, timeout=None: sent.append(req))
     for path in ("/api/quests/None/state", "/api/quests//state", "/api/quests/undefined/goals", "/api/quests/null"):
         with pytest.raises(QuestApiError, match="has no id"):
             make_client()._request("GET", path)
