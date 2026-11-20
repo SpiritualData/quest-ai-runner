@@ -53,6 +53,22 @@ from quest_ai_runner.body.hands.quest_operations.run_operations import pinned_op
 
 
 
+def polling_check(check: Callable[[], bool], on_poll: Optional[Callable[[], None]]) -> Callable[[], bool]:
+    """``check`` that first runs ``on_poll`` (best-effort, never raises): the run polls its stop check often, which is the
+    cadence the progress sink uses to post a held-back step once its throttle window has passed."""
+    if on_poll is None:
+        return check
+
+    def _check() -> bool:
+        try:
+            on_poll()
+        except Exception:  # noqa: BLE001 -- a progress post must never affect the run
+            pass
+        return check()
+
+    return _check
+
+
 class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin):
     def __init__(self, client, orchestrator: Orchestrator, *,
                 quest_folder_map: Optional[Dict[str, str]] = None,
@@ -214,7 +230,7 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
 
         return _poll
 
-    def _build_run_control(self, task_id: str) -> RunControl:
+    def _build_run_control(self, task_id: str, on_poll: Optional[Callable[[], None]] = None) -> RunControl:
         """The ``RunControl`` of THIS task's run, for a deep worker that holds a live session.
 
         Bound to one task id, so a message claimed through it belongs to this task and no other.
@@ -258,7 +274,7 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
 
         return RunControl(
             claim_inputs=claim_inputs, mark_seen=mark_seen,
-            cancel_requested=self._build_cancel_check(task_id, RUN_CONTROL_POLL_SECONDS),
+            cancel_requested=polling_check(self._build_cancel_check(task_id, RUN_CONTROL_POLL_SECONDS), on_poll),
             pause_requested=pause_requested, poll_seconds=RUN_CONTROL_POLL_SECONDS,
             label=task_id)
 
@@ -546,7 +562,7 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         # Cooperative mid-run cancellation: a THROTTLED check (see _build_cancel_check) threaded
         # into the orchestrator so a human hitting "stop" while this task is in_progress can abort
         # the run cleanly at its next loop boundary instead of running to completion regardless.
-        cancel_check = self._build_cancel_check(task_id)
+        cancel_check = polling_check(self._build_cancel_check(task_id), sink.flush_due)
 
         # Explicit mid-run steering channel: a THROTTLED callable (see _build_pending_inputs) that
         # claims any NEW messages the human sends while this task is in_progress, so the deep retry
@@ -572,7 +588,7 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         control_kwargs: Dict[str, Any] = {}
         try:
             if "run_control" in inspect.signature(self._orch.run).parameters:
-                control_kwargs["run_control"] = self._build_run_control(task_id)
+                control_kwargs["run_control"] = self._build_run_control(task_id, on_poll=sink.flush_due)
         except (TypeError, ValueError):
             pass
         def run_once(brief: str, resume: Optional[str],

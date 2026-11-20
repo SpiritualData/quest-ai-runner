@@ -1470,7 +1470,7 @@ def test_claim_includes_handler_in_patch_body(monkeypatch):
     client = QuestClient("http://quest.example", "qsk_test")
     client.claim("t1", handler="alex")
 
-    assert captured["url"] == "http://quest.example/api/assistant-tasks/t1"
+    assert captured["url"] == "http://quest.example/api/assistant-tasks/t1?slim=true"   # every task PATCH asks for the slim reply
     assert captured["method"] == "PATCH"
     assert json.loads(captured["body"]) == {"status": "in_progress", "handler": "alex"}
 

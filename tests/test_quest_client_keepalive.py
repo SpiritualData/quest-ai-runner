@@ -123,3 +123,62 @@ def test_an_unreachable_host_is_still_a_quest_api_error():
     client = QuestClient("http://127.0.0.1:1", "k", team_id="t", read_retries=0)
     with pytest.raises(QuestApiError):
         client._request("GET", "/api/x")
+
+
+class _SwallowingServer(_Server):
+    """Processes the next ``swallow`` requests, then closes the connection WITHOUT a reply (the reply is lost)."""
+
+    def __init__(self):
+        super().__init__()
+        self.swallow = 0
+        outer = self
+        handler = self.httpd.RequestHandlerClass
+        reply = handler._reply
+
+        def _maybe_swallow(h):
+            if outer.swallow:
+                outer.swallow -= 1
+                length = int(h.headers.get("Content-Length") or 0)
+                body = h.rfile.read(length) if length else b""
+                outer.requests.append((h.command, h.path, dict(h.headers), body))
+                h.close_connection = True
+                return
+            reply(h)
+
+        handler.do_GET = handler.do_POST = handler.do_PATCH = _maybe_swallow
+
+
+@pytest.fixture
+def swallowing():
+    s = _SwallowingServer()
+    yield s
+    s.stop()
+
+
+def test_a_post_whose_reply_was_lost_is_not_sent_again(swallowing):
+    client = QuestClient(swallowing.url, "k", team_id="t", read_retries=0)
+    client._request("GET", "/api/x")                       # opens the keep-alive connection
+    swallowing.swallow = 1
+    with pytest.raises(QuestApiError) as err:
+        client._request("POST", "/api/tasks/t1/messages/claim", body={})
+    posts = [r for r in swallowing.requests if r[0] == "POST"]
+    assert len(posts) == 1                                 # applied once, never replayed on a fresh connection
+    assert err.value.transient and err.value.outcome_unknown
+
+
+def test_a_get_whose_reply_was_lost_on_a_reused_connection_is_sent_again(swallowing):
+    client = QuestClient(swallowing.url, "k", team_id="t", read_retries=0)
+    client._request("GET", "/api/x")
+    swallowing.swallow = 1
+    assert client._request("GET", "/api/x")["ok"] is True
+    assert [r[0] for r in swallowing.requests] == ["GET", "GET", "GET"]
+
+
+def test_a_post_after_the_server_closed_the_idle_connection_goes_out_once_on_a_fresh_one(server):
+    server.drop_after_reply = True
+    client = client_for(server)
+    client._request("GET", "/api/x")                       # the server closes this connection after replying
+    import time
+    time.sleep(0.05)                                       # let the close reach the client's socket
+    assert client._request("POST", "/api/y", body={"a": 1})["ok"] is True
+    assert [r[0] for r in server.requests] == ["GET", "POST"] and server.connections == 2

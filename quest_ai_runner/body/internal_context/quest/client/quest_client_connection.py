@@ -5,13 +5,19 @@
 ``read``/``headers``/``status``, ``urllib.error.HTTPError`` for a 4xx/5xx, ``URLError`` when the host could not be reached,
 a raw ``OSError``/``TimeoutError`` for a failure mid-exchange), so callers and their retry policy are unchanged.
 
-A reused connection the server has closed meanwhile fails before any reply arrives; that one case is retried once on a
-fresh connection. Connections are per thread (``http.client`` connections are not thread-safe) and never shared.
+A pooled connection the server has already closed (it reads as readable while idle) is replaced before the request
+goes out. A reused connection that still fails is sent again once on a fresh connection only when that cannot apply the
+request twice: the method is idempotent (GET, HEAD, PUT, DELETE, OPTIONS), or the failure came while sending, before the
+request was fully written (``CannotSendRequest``, ``BrokenPipeError``). A POST or PATCH whose reply was lost may already
+have been applied (a message claim consumed, a task created), so that error is raised and the caller's own retry policy
+(an Idempotency-Key, or none) decides. Connections are per thread (``http.client`` connections are not thread-safe) and
+never shared.
 """
 from __future__ import annotations
 
 import http.client
 import io
+import select
 import socket
 import threading
 import urllib.error
@@ -21,9 +27,21 @@ from typing import Dict, Optional, Tuple
 
 _local = threading.local()
 
-# A reply never arrived on a connection that was open and idle: the server closed it, the request was not processed.
-_STALE = (http.client.RemoteDisconnected, BrokenPipeError, ConnectionResetError, ConnectionAbortedError,
-          http.client.CannotSendRequest, http.client.ResponseNotReady, http.client.BadStatusLine)
+# Methods a second send cannot apply twice (RFC 9110 9.2.2).
+IDEMPOTENT_METHODS = frozenset({"GET", "HEAD", "PUT", "DELETE", "OPTIONS"})
+# Failed while SENDING on a reused connection: the request was not fully written, so the server cannot have processed it.
+NOT_SENT_ERRORS = (http.client.CannotSendRequest, BrokenPipeError)
+# Failed after the request was written (no reply, a reset, a garbled status line): the server may or may not have processed it.
+NO_REPLY_ERRORS = (http.client.RemoteDisconnected, ConnectionResetError, ConnectionAbortedError, BrokenPipeError,
+             http.client.ResponseNotReady, http.client.BadStatusLine)
+
+
+class SendFailed(Exception):
+    """Wraps an error raised while writing the request, so it is told apart from one raised while reading the reply."""
+
+    def __init__(self, error: BaseException) -> None:
+        super().__init__(str(error))
+        self.error = error
 
 
 class Response(io.BytesIO):
@@ -59,9 +77,31 @@ def _exchange(conn: http.client.HTTPConnection, req: urllib.request.Request, tar
         conn.timeout = timeout
         if conn.sock is not None:
             conn.sock.settimeout(timeout)
-    conn.request(req.get_method(), target, body=req.data, headers=dict(req.header_items()))
+    try:
+        conn.request(req.get_method(), target, body=req.data, headers=dict(req.header_items()))
+    except NOT_SENT_ERRORS as e:
+        raise SendFailed(e) from e
     resp = conn.getresponse()
     return resp, resp.read()
+
+
+def connection_dropped(conn: http.client.HTTPConnection) -> bool:
+    """True when an idle pooled connection is unusable: readable with no request out means the server closed it (or sent
+    something unasked). Checked before reuse so a closed keep-alive never costs a write its only send."""
+    sock = conn.sock
+    if sock is None:
+        return False
+    try:
+        readable, _, _ = select.select([sock], [], [], 0)
+    except (OSError, ValueError):
+        return True
+    return bool(readable)
+
+
+def as_os_error(error: BaseException) -> OSError:
+    """A garbled or missing reply (``http.client.HTTPException``) as a ``ConnectionError``, which the transport reports
+    like any other mid-exchange failure (``BadStatusLine`` is not an ``OSError`` and would otherwise escape it)."""
+    return ConnectionError(f"{type(error).__name__}: {error}")
 
 
 def open_url(req: urllib.request.Request, timeout: Optional[float] = None) -> Response:
@@ -69,8 +109,11 @@ def open_url(req: urllib.request.Request, timeout: Optional[float] = None) -> Re
     key = (parts.scheme, parts.netloc)
     target = (parts.path or "/") + ("?" + parts.query if parts.query else "")
     pool = _connections()
+    idempotent = req.get_method().upper() in IDEMPOTENT_METHODS
     for fresh in (False, True):
         conn = pool.get(key)
+        if conn is not None and not fresh and connection_dropped(conn):
+            fresh = True          # the server closed it while idle: replace it before anything is sent
         reused = conn is not None and not fresh
         if conn is None or fresh:
             if conn is not None:
@@ -79,12 +122,20 @@ def open_url(req: urllib.request.Request, timeout: Optional[float] = None) -> Re
             conn = pool[key] = cls(parts.netloc, timeout=timeout)
         try:
             resp, raw = _exchange(conn, req, target, timeout)
-        except _STALE:
+        except SendFailed as e:
             pool.pop(key, None)
             conn.close()
             if reused:
-                continue          # the idle connection had been closed by the server: once more on a fresh one
-            raise
+                continue          # not fully written, so not processed: once more on a fresh connection, any method
+            raise e.error from None
+        except NO_REPLY_ERRORS as e:
+            pool.pop(key, None)
+            conn.close()
+            if reused and idempotent:
+                continue          # a second send of an idempotent request is safe: once more on a fresh connection
+            if isinstance(e, OSError):
+                raise             # may have been applied: the caller's retry policy decides
+            raise as_os_error(e) from e
         except (socket.gaierror, ConnectionRefusedError) as e:   # never reached the host: urlopen's URLError
             pool.pop(key, None)
             conn.close()

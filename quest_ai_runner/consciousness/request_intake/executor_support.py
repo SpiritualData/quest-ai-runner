@@ -303,8 +303,16 @@ class _TaskProgressSink:
     task-detail SSE stream shows step-by-step what the AI is doing (plan -> read ->
     answer) and live token counts. Milestones also go to ``on_milestone``, which keeps them on
     the task stream too: interim updates never post into the originating chat.
+
+    Only step kinds a newer one replaces (``REPLACEABLE``: what the run is doing right now) are
+    throttled to one post per interval, the latest winning. Every other kind (agent started/ended,
+    spend, structure, stop decision, milestone, decision, tokens) is a tick the run panel draws from
+    and posts at once, after any held-back step so the stream stays in order. A held-back step is
+    posted by ``flush_due`` once its window has passed (the executor calls it from its frequent
+    cancel and run-control polls), so a long tool call never leaves a stale step showing.
     """
     _SKIP = frozenset({"partial"})
+    REPLACEABLE = frozenset({"status", "exec", "read", "plan", "replan", "context", "understanding", "intent"})
 
     def __init__(self, task_id: str, report_fn: Callable, on_milestone: Optional[Callable], goal: str = "",
                  min_interval: float = PROGRESS_POST_INTERVAL_SECONDS, clock: Callable[[], float] = time.monotonic):
@@ -333,6 +341,13 @@ class _TaskProgressSink:
         if pending is not None:
             self._post(*pending)
 
+    def flush_due(self) -> None:
+        """Post the held-back step if its throttle window has passed; nothing otherwise. Cheap, safe to call often."""
+        with self._lock:
+            if self._pending is None or (self._last_post is not None and self._clock() - self._last_post < self._min_interval):
+                return
+        self.flush()
+
     def update(self, event: ProgressEvent, mode) -> None:
         if event.type in self._SKIP:
             return
@@ -341,16 +356,23 @@ class _TaskProgressSink:
             data = event.data
             if description:
                 data = {**(data if isinstance(data, dict) else {}), "description": description}
-            # At most one post per interval per task, the latest event wins: a run emitted about one a second (248 posts, 5 minutes).
+            posts = []
             with self._lock:
                 now = self._clock()
-                due = self._last_post is None or now - self._last_post >= self._min_interval
-                if due:
+                if event.type not in self.REPLACEABLE:
+                    # A structured tick no later event replaces: post it now, after the held-back step (stream order).
+                    if self._pending is not None:
+                        posts.append(self._pending)
+                        self._last_post, self._pending = now, None
+                    posts.append((event.type, event.text, data))
+                elif self._last_post is None or now - self._last_post >= self._min_interval:
+                    # At most one step post per interval per task, the latest wins: a run emitted about one a second (248 posts, 5 minutes).
                     self._last_post, self._pending = now, None
+                    posts.append((event.type, event.text, data))
                 else:
                     self._pending = (event.type, event.text, data)
-            if due:
-                self._post(event.type, event.text, data)
+            for post in posts:
+                self._post(*post)
         except Exception:  # noqa: BLE001
             pass
         try:
