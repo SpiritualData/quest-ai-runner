@@ -18,6 +18,11 @@ from quest_ai_runner.body.internal_context.quest.client.quest_client_support imp
 CONTROL_READ_WINDOW_SECONDS = 10.0   # a run's cancel and pause checks share one task read per window (was two reads every 2 s, ~100 KB each)
 
 
+# Every task PATCH asks for the control-field reply: the whole task was ~0.3 MB with a long run's log and no caller reads it (a capped
+# home line, 2026-11-20). An older backend ignores the flag and sends the whole task, which is still correct.
+SLIM_REPLY = {"slim": "true"}
+
+
 def _control_now() -> float:
     return _time.monotonic()
 
@@ -271,7 +276,7 @@ class TasksMixin:
         if handler:
             body["handler"] = handler
         try:
-            return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=body)
+            return self._request("PATCH", f"/api/assistant-tasks/{task_id}", params=SLIM_REPLY, body=body)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("claim failed for task %s: %s", task_id, e)
             return None
@@ -311,14 +316,14 @@ class TasksMixin:
         """
         path = f"/api/assistant-tasks/{task_id}"
         try:
-            return self._write("PATCH", path, body=self._with_session(body, session_id), label=name)
+            return self._write("PATCH", path, params=SLIM_REPLY, body=self._with_session(body, session_id), label=name)
         except QuestWriteError as e:
             if e.status == 422 and "result_data" in body and "result_data" in e.detail:
                 log.warning("backend does not accept result_data on a task report; reporting task "
                             "%s without it (%s)", task_id, name)
                 body.pop("result_data", None)
                 try:
-                    return self._write("PATCH", path, body=self._with_session(body, session_id), label=name)
+                    return self._write("PATCH", path, params=SLIM_REPLY, body=self._with_session(body, session_id), label=name)
                 except QuestWriteError as retry_error:
                     e = retry_error
                 except QuestNotConfigured as not_configured:
@@ -427,7 +432,7 @@ class TasksMixin:
         if sid:
             body["resume_session_id"] = sid
         try:
-            return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=body)
+            return self._request("PATCH", f"/api/assistant-tasks/{task_id}", params=SLIM_REPLY, body=body)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("requeue (%s) failed for task %s: %s", hold_reason, task_id, e)
             return None
@@ -452,7 +457,7 @@ class TasksMixin:
         try:
             # An accepted write with an empty body is still a success; only a raised error is not.
             return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                                 body=body) or {"task_id": task_id, "status": "queued"}
+                                 params=SLIM_REPLY, body=body) or {"task_id": task_id, "status": "queued"}
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("pause hand-back failed for task %s: %s", task_id, e)
             return None
@@ -479,7 +484,7 @@ class TasksMixin:
         body = {"start_at": self.utc_stamp(start_at), "hold_reason": "claude_limit",
                 "hold_detail": (detail or "")[:500]}
         try:
-            return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=body)
+            return self._request("PATCH", f"/api/assistant-tasks/{task_id}", params=SLIM_REPLY, body=body)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("hold_for_usage_limit failed for task %s: %s", task_id, e)
             return None
@@ -854,7 +859,7 @@ class TasksMixin:
             body["new_goal"] = dict(new_goal)
         return self._write("POST", "/api/assistant-tasks", body=body, label="Creating the task")
 
-    def update_task(self, task_id: str, fields: Dict[str, Any]) -> WriteResult:
+    def update_task(self, task_id: str, fields: Dict[str, Any], *, slim: bool = True) -> WriteResult:
         """PATCH arbitrary updatable fields on a task (the generic write the report_* helpers wrap).
 
         The Quest API's task PATCH accepts ``status`` (queued|in_progress|done|needs_you|failed|
@@ -864,11 +869,15 @@ class TasksMixin:
         create route has no ``status`` field, so create-then-PATCH is the only way to land a task
         in the suggested state).
 
+        The reply is the slim control-field task by default (``slim=True``): the whole task was ~0.3 MB with a long run's log and
+        no caller reads it. Pass ``slim=False`` to get the whole task back. An older backend ignores the flag, still correct.
+
         RAISES on failure rather than swallowing: the caller that just created a task and is
         demoting it to ``suggested`` must know if that demotion failed, otherwise a proposal the
         user never approved would sit in the queue and RUN. Silent failure here is not acceptable.
         """
-        return self._write("PATCH", f"/api/assistant-tasks/{task_id}", body=dict(fields), label="Updating the task")
+        return self._write("PATCH", f"/api/assistant-tasks/{task_id}", params=SLIM_REPLY if slim else None, body=dict(fields),
+                           label="Updating the task")
 
     def list_tasks(self, *, team_id: Optional[str] = None,
                   status: Optional[str] = None,
