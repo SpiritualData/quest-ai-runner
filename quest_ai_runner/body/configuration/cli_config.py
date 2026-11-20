@@ -706,6 +706,7 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     # QAR_CONFIG_FILE (see RunnerConfig.from_file + config.apply_file_defaults). A field an env var
     # set always wins; this never overrides one.
     apply_file_defaults(cfg, file_cfg)
+    cfg.config_file_path = str(Path(config_path).expanduser().resolve()) if config_path else None
     # Last: turn the file's declarative pointers (a JSON map, a service-account
     # credential) into the live maps and clients they describe.
     resolve_config_objects(cfg)

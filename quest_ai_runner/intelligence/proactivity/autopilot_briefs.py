@@ -422,6 +422,25 @@ def esoi_skill_section() -> str:
     return ""
 
 
+#: The first step of a run for a quest that has no folder in the lane's folder map. Written once, filled by ``folder_first_step``.
+FOLDER_FIRST_STEP = (
+    "FIRST STEP: give this quest a folder.\n"
+    "This quest ({quest}, id {quest_id}) has no folder yet. Before any other work:\n"
+    "1. List the folders that already exist: {candidates_cmd}\n"
+    "2. If one is dedicated to the same area AND this quest, use it. Never use a folder whose bound_to is another quest.\n"
+    "3. Otherwise create a new one at {root}/<area>/<short-slug>, reusing an area name from that list.\n"
+    "4. Bind it (this records it, scaffolds it and syncs the quest into it): {bind_cmd}\n"
+    "Then do the rest of this run's work from that folder.")
+
+
+def folder_first_step(quest_id: str, quest_name: str, *, config_path: str, root: str) -> str:
+    """The "give this quest a folder" section, with the lane's own commands filled in."""
+    base = f"quest-ai-runner quest-folder %s --config {config_path}"
+    return FOLDER_FIRST_STEP.format(
+        quest=quest_name or quest_id, quest_id=quest_id, root=root, candidates_cmd=base % "candidates",
+        bind_cmd=f"{base % 'bind'} --quest-id {quest_id} --folder <folder>")
+
+
 def compose_batch_text(quest_outcome: str,
                        persona: Optional[str] = None, *,
                        scope_label: Optional[str] = None,

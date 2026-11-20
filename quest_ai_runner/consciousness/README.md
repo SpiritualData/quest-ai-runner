@@ -215,6 +215,7 @@ Result is the share of the metric's cases an implementation passes (its balanced
 | Fit by role, assigned quests and intent branch (proposed) | `quest-representatives:fit_by_role_and_quests` |  |  |
 | Ask the person on an equal fit (proposed) | `quest-representatives:ask_the_person` |  |  |
 | Work-folder sync | `quest-requests:quest_folder_sync` | [quest_ai_runner/intelligence/higher_mind/objectives/quest_folder_sync.py](../intelligence/higher_mind/objectives/quest_folder_sync.py) |  |
+| Folder binding for a quest with no folder | `quest-requests:quest_folder_bind` | [quest_ai_runner/intelligence/higher_mind/objectives/quest_folder_bind.py](../intelligence/higher_mind/objectives/quest_folder_bind.py) |  |
 | Decision-request sink | `quest-decision-requests:quest_decision` | [quest_ai_runner/body/internal_context/quest/client/quest_client.py](../body/internal_context/quest/client/quest_client.py) |  |
 | Fake-backend delivery check | `quest-decision-requests:quest_decision_sink` | [evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py](../../evaluation/components/escalate_to_a_human/impls/quest_decision_sink.py) |  |
 | Conversation screen (Textual) | `terminal-session:textual_screen` | [quest_ai_runner/consciousness/terminal/textual_session.py](terminal/textual_session.py) |  |

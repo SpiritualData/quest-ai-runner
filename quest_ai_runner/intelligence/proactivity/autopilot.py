@@ -38,7 +38,8 @@ from quest_ai_runner.intelligence.proactivity.autopilot_defaults import (  # noq
 from quest_ai_runner.intelligence.proactivity.autopilot_periods import (  # noqa: F401
     task_lookback_start,
     _parse_dt, current_goal_ladder, current_scope_label)
-from quest_ai_runner.intelligence.proactivity.autopilot_briefs import _batch_title, compose_batch_text, next_steps_from_pass  # noqa: F401
+from quest_ai_runner.intelligence.higher_mind.objectives.quest_folder_bind import read_map
+from quest_ai_runner.intelligence.proactivity.autopilot_briefs import _batch_title, compose_batch_text, folder_first_step, next_steps_from_pass  # noqa: F401
 from quest_ai_runner.intelligence.proactivity.autopilot_personas import (
     capped_instructions, default_persona_instructions_for, default_quest_instructions_for)
 from quest_ai_runner.consciousness.request_intake.local_time import now_in_zone
@@ -113,6 +114,7 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                  adopt_recurring_default: Optional[bool] = None,
                  quest_folder_map: Optional[Dict[str, str]] = None,
                  pending_work: Optional[Dict[str, Any]] = None,
+                 quest_folder_binding: Optional[Dict[str, str]] = None,
                  update_engine: Optional[UpdateEngine] = None,
                  lane_user_id: Optional[str] = None,
                  judge: Optional[Callable[[str], str]] = None,
@@ -161,6 +163,9 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # next-steps artifact read and refreshed; one without is unaffected.
         self._quest_folder_map: Dict[str, str] = {
             str(k): str(v) for k, v in (quest_folder_map or {}).items() if v}
+        # {"map_file", "config_path", "root"} (RunnerConfig.quest_folder_map_file, config_file_path, new_quest_folder_root): when set, a run for a quest with
+        # no folder starts by binding one (``quest_folder_bind``). None = off, exactly as before.
+        self._quest_folder_binding = dict(quest_folder_binding) if quest_folder_binding and quest_folder_binding.get("map_file") else None
         # ``{quest_id: {"file", "label"}}`` (RunnerConfig.autopilot_pending_work): work waiting on a
         # quest that makes it due even when its cadence is not (see ``runner/autopilot_pending.py``).
         self._pending_work_specs: Dict[str, Any] = dict(pending_work or {})
@@ -273,7 +278,22 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                                                    proposal_open=bool(ctx.get("proposal_open")), may_propose=True) or None) if ctx else None,
             asked=ctx.get("asked"), intent_frame=ctx.get("intent_frame"), esoi_readiness=(readiness_and_pick(ctx.get("esoi_read"), own, unit.get("rep_id") or None)[0] if ctx else None),
             source_text=source_text)
-        return f"{RUN_BRIEF_HEADER}\n\n{text}"
+        first_step = self._folder_first_step(quest, quest_id)
+        return f"{RUN_BRIEF_HEADER}\n\n{first_step + chr(10) * 2 if first_step else ''}{text}"
+
+    def set_quest_folder_map(self, quest_folder_map: Optional[Dict[str, str]]) -> None:
+        """Replace the quest -> folder map (the poller re-reads the map file, so a folder bound by one run is known to the next without a restart)."""
+        self._quest_folder_map = {str(k): str(v) for k, v in (quest_folder_map or {}).items() if v}
+
+    def _folder_first_step(self, quest: Dict[str, Any], quest_id: str) -> str:
+        """The "give this quest a folder" section, or "" when binding is off or the quest already has a folder (this lane's map, or the map file as it is now)."""
+        binding = self._quest_folder_binding
+        if not binding or self._quest_folder_map.get(str(quest_id)):
+            return ""
+        if read_map(binding["map_file"]).get(str(quest_id)):
+            return ""
+        return folder_first_step(quest_id, str(quest.get("name") or _quest_label(quest, quest_id)),
+                                 config_path=binding.get("config_path") or "<lane config>", root=binding.get("root") or "")
 
     def _assigned_goals(self, quest: Dict[str, Any], quest_id: str, unit: Dict[str, Any], ctx: Dict[str, Any]) -> List[str]:
         """The goal lines routed to THIS autopilot today: the day's one judgment across the autopilots on duty (``autopilot_routing``), made once per

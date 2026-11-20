@@ -360,3 +360,32 @@ def _cmd_sync_quest_folder(args, log) -> int:
         parts.append(f"pushed {result.notes_pushed} note(s)")
     print(f"Synced quest {args.quest_id} -> {result.sync_path} ({', '.join(parts)})")
     return 0
+
+
+def _cmd_quest_folder(args, log) -> int:
+    """Run `quest-folder candidates|bind`; returns the process exit code. `candidates` writes nothing."""
+    from quest_ai_runner.body.configuration.cli_config import _config_from_env
+    from quest_ai_runner.intelligence.higher_mind.objectives.quest_folder_bind import (
+        QuestFolderBindError, bind_quest_folder, folder_candidates, resolve_root)
+    cfg = _config_from_env(getattr(args, "config", None))
+    root = resolve_root(cfg.new_quest_folder_root, cfg.corpus_root)
+    if not root or not cfg.quest_folder_map_file:
+        log.error("the lane config needs quest_folder_map_file and a corpus_root (or new_quest_folder_root)")
+        return 1
+    if args.quest_folder_action == "candidates":
+        print(json.dumps({"root": root, "candidates": [c.as_dict() for c in folder_candidates(root, cfg.quest_folder_map_file)]}, indent=2))
+        return 0
+    client = None
+    try:
+        client = load_quest_client(getattr(args, "config", None))
+    except Exception as e:  # noqa: BLE001 -- binding still records and scaffolds; only the Quest sync is skipped
+        log.warning("no Quest client (%s): binding without the Quest sync", e)
+    try:
+        result = bind_quest_folder(cfg.quest_folder_map_file, args.quest_id, args.folder, root=root, client=client,
+                                   direction=args.direction or cfg.quest_folder_sync_direction)
+    except QuestFolderBindError as e:
+        log.error("bind refused: %s", e)
+        return 1
+    print(f"Bound quest {result.quest_id} -> {result.folder} ({'recorded' if result.added else 'already recorded'} in {result.map_file}"
+          f"{'; synced' if result.sync else '; not synced'})")
+    return 0

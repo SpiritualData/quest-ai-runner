@@ -260,6 +260,21 @@ def add_sync_quest_folder_command(sub) -> None:
                         help="do not write the quest's specification to ESOI_SPEC.md on a pull")
 
 
+def add_quest_folder_command(sub) -> None:
+    """The `quest-folder` subcommand: `candidates` (read only) and `bind` (the one safe write)."""
+    qf = sub.add_parser("quest-folder", help="give a quest a folder: list the existing candidates, or bind one (records it in the lane's folder map, "
+                                             "scaffolds it and syncs the quest into it)")
+    qf_sub = qf.add_subparsers(dest="quest_folder_action", required=True)
+    cand = qf_sub.add_parser("candidates", help="list folders that look like a quest home and which quest each is bound to (writes nothing)")
+    bind = qf_sub.add_parser("bind", help="bind a quest to a folder inside the lane's new_quest_folder_root (created if missing)")
+    for p in (cand, bind):
+        p.add_argument("--config", default=None, metavar="PATH", help="the lane's TOML config file (QAR_CONFIG_FILE also works)")
+    bind.add_argument("--quest-id", required=True, help="the quest to bind")
+    bind.add_argument("--folder", required=True, help="the folder (inside new_quest_folder_root)")
+    bind.add_argument("--direction", choices=["pull", "push", "both"], default=None,
+                      help="sync direction (default: the lane's quest_folder_sync_direction)")
+
+
 from quest_ai_runner.consciousness.terminal.cli_spend import add_spend_command  # noqa: E402
 
 
@@ -351,6 +366,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_context_command(sub)
     add_cards_command(sub)
     add_sync_quest_folder_command(sub)
+    add_quest_folder_command(sub)
     add_doctor_command(sub)
     add_spend_command(sub)
     add_poll_command(sub)

@@ -93,7 +93,7 @@ _FILE_SCALAR_FIELDS = {
     "context_sources_map", "context_sources_file", "drive_comments_auth", "inbound_mail_auth",
     "notion", "google_chat", "metric_sources",
     "feedback_ledger", "feedback_ledger_path",
-    "quest_folder_map_file",
+    "quest_folder_map_file", "new_quest_folder_root",
     "state_path", "lane_label", "env_files", "env_aliases", "env",
     "extra",
 }
@@ -678,6 +678,11 @@ class RunnerConfig:
     # A JSON file holding {quest_id: folder}. ``quest_folder_map`` takes the dict itself and there
     # was no pointer form, which is the one reason several lanes still read a JSON file in Python.
     quest_folder_map_file: Optional[str] = None
+    # Where a NEW quest folder may be created when an autopilot run finds its quest has no folder in the map
+    # (``quest-ai-runner quest-folder bind``). None -> ``<corpus_root>/stories``. A bind outside it is refused.
+    new_quest_folder_root: Optional[str] = None
+    # The TOML file this config was loaded from; set by the loader, never by the file. The brief's bind command names it.
+    config_file_path: Optional[str] = None
 
     # --- lane shape (so a lane is a config file, not a program) ---
     # Where the exactly-once signature dedup store lives (``QAR_STATE_PATH``'s file form).

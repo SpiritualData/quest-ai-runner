@@ -34,6 +34,7 @@ if TYPE_CHECKING:  # typing only
     from quest_ai_runner.body.configuration.config import RunnerConfig
 
 from quest_ai_runner.intelligence.higher_mind.objectives.goal_handoff import make_judge
+from quest_ai_runner.intelligence.higher_mind.objectives.quest_folder_bind import read_map, resolve_root
 from quest_ai_runner.intelligence.proactivity.autopilot import AutopilotPass
 from quest_ai_runner.intelligence.proactivity.autopilot_periods import _parse_dt
 from quest_ai_runner.intelligence.proactivity.autopilot_defaults import AUTOPILOT_WORK_KIND
@@ -180,6 +181,7 @@ class Poller(PassesMixin, SyncMixin):
             # Same map the folder sync uses, so a quest whose folder is already synced also gets
             # its canonical next-steps artifact read and refreshed by each pass.
             quest_folder_map=config.quest_folder_map,
+            quest_folder_binding=self._folder_binding(config),
             pending_work=config.autopilot_pending_work,
             # What has changed on each quest since a run last looked at it, on every channel the
             # quest itself asks for. None when the consumer switched it off.
@@ -245,6 +247,7 @@ class Poller(PassesMixin, SyncMixin):
         # Quest-folder periodic sync (opt-in, cfg.quest_folder_map) runs every scan regardless of
         # task pickup below — it's a light data sync, not new work, so it isn't gated by the
         # resource/token guards that protect against taking on MORE agentic work.
+        self._reload_quest_folder_map()
         self._sync_all_quest_folders()
         # Autopilot's own producer: guarantee the recurring pass task exists whenever a quest is
         # opted in. Like the folder sync above, this is light bookkeeping rather than agentic work,
@@ -397,6 +400,27 @@ class Poller(PassesMixin, SyncMixin):
 
     def _is_autopilot_run(self, task: Dict[str, Any]) -> bool:
         return str(task.get("task_kind") or "") == AUTOPILOT_RUN_KIND
+
+    @staticmethod
+    def _folder_binding(config) -> Optional[Dict[str, str]]:
+        """What a run needs to give an unmapped quest a folder, or None when the lane has no map file (then nothing is asked of the run)."""
+        root = resolve_root(getattr(config, "new_quest_folder_root", None), getattr(config, "corpus_root", None))
+        if not getattr(config, "quest_folder_map_file", None) or not root:
+            return None
+        return {"map_file": config.quest_folder_map_file, "config_path": getattr(config, "config_file_path", None) or "", "root": root}
+
+    def _reload_quest_folder_map(self) -> None:
+        """Pick up folders bound since the last scan (``quest-ai-runner quest-folder bind`` writes the map file), so a new binding takes effect with no restart.
+        File entries are added UNDER the ones already held (inline wins, as at startup). Best-effort: an unreadable file changes nothing."""
+        map_file = getattr(self.cfg, "quest_folder_map_file", None)
+        if not map_file:
+            return
+        fresh = read_map(map_file)
+        current = dict(self.cfg.quest_folder_map or {})
+        merged = {**fresh, **current}
+        if merged != current:
+            self.cfg.quest_folder_map = merged
+            self._autopilot.set_quest_folder_map(merged)
 
     def _autopilot_folder_key(self, task: Dict[str, Any]) -> str:
         """What one autopilot run at a time is serialized on: the quest's synced folder, else the quest itself."""

@@ -442,7 +442,7 @@ from quest_ai_runner.consciousness.terminal.cli_context import (
     _cmd_bootstrap, _cmd_context, _cmd_paste_context, _cmd_search_context, select_card_ids_for_text)
 from quest_ai_runner.consciousness.terminal.cli_chat import _cmd_chat
 from quest_ai_runner.consciousness.terminal.cli_quest import (
-    _cmd_create_goal, _cmd_reconcile_plan, _cmd_send, _cmd_sync_quest_folder, _quest_method_is_read_only, _run_quest_command)
+    _cmd_create_goal, _cmd_reconcile_plan, _cmd_send, _cmd_quest_folder, _cmd_sync_quest_folder, _quest_method_is_read_only, _run_quest_command)
 from quest_ai_runner.consciousness.terminal.cli_cards import run_cards_command
 from quest_ai_runner.consciousness.terminal.cli_poll import _cmd_channel, _cmd_poll
 from quest_ai_runner.consciousness.terminal.cli_doctor import _cmd_doctor
@@ -484,6 +484,7 @@ def main(argv=None) -> int:
         "context": _cmd_context,
         "cards": run_cards_command,
         "sync-quest-folder": _cmd_sync_quest_folder,
+        "quest-folder": _cmd_quest_folder,
         "bootstrap": _cmd_bootstrap,
         "paste-context": _cmd_paste_context,
         "search-context": _cmd_search_context,
