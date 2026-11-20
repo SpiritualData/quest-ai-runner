@@ -148,7 +148,7 @@ def check(orchestrator: Any, rs: SimpleNamespace, emit: Any = None) -> Optional[
             rs.context_view = BLOCK_HEAD + text + ("\n\n" + rs.context_view if getattr(rs, "context_view", "") else "")
             steer_parts.append("The data the answer depends on is now in the context (see the top block); write the reply from it.")
         if outcome.get("answers_request") is False and outcome.get("missing"):
-            steer_parts.append("The previous reply did not address the request: it left out " + str(outcome["missing"]).rstrip(".") + ". Answer exactly what was asked.")
+            steer_parts.append("The previous reply did not address the request: it left out " + str(outcome["missing"]).rstrip(".") + ". Answer exactly what was asked. Keep every correct part of the previous reply and add the missing part; where a detail is unknown, state one clearly labelled assumption and answer with it instead of asking the person for it.")
         if not steer_parts:
             break
         if emit is not None:
