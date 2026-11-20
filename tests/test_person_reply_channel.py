@@ -299,7 +299,9 @@ def test_history_is_asked_for_by_quest_and_not_filtered_to_successes():
     client = HistoryClient(tasks=[task("done", "a"), task("failed", "b")])
     _executor(client)._build_context_view(goal_id=None, quest_id="q1")
 
-    assert client.list_tasks_calls == [{"goal_id": "q1"}]
+    # No status filter (failed runs count too). Progress logs are left out of the read since a1933c47:
+    # a full history reply was 59 MB on the shared lane.
+    assert client.list_tasks_calls == [{"goal_id": "q1", "without_progress": True}]
 
 
 def test_history_is_bounded_and_ends_with_the_most_recent():
