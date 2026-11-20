@@ -302,8 +302,16 @@ class ContextViewMixin:
         block.
         """
         try:
-            bundle = self._update_engine.collect(quest or {}, card_id=quest_id, card_kind="quest")
+            folder = str((getattr(self, "_quest_folder_map", None) or {}).get(str(quest_id)) or "")
+            bundle = self._update_engine.collect(quest or {}, card_id=quest_id, card_kind="quest",
+                                                 consumer="deep-run", folder=folder)
             self._context_bundle = bundle
+            if folder and bundle.updates:
+                # Same as an autopilot pass: the news is written in full to the quest folder, the run is handed an index.
+                from quest_ai_runner.body.intake_sources.context_updates_file import index_block, write_context_file
+                written = write_context_file(bundle, folder, consumer="deep-run")
+                if written is not None:
+                    return index_block(bundle, written)
             return bundle.as_prompt_block() or ""
         except Exception:  # noqa: BLE001 -- context is never worth failing a run over
             log.warning("context updates unavailable for quest %s", quest_id, exc_info=True)

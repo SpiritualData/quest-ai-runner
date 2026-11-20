@@ -28,6 +28,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from quest_ai_runner.body.intake_sources.context_updates import ContextUpdates, UpdateEngine
+from quest_ai_runner.body.intake_sources.context_updates_file import index_block, write_context_file
 from quest_ai_runner.intelligence.higher_mind.guidance.insights import InsightsContext
 from quest_ai_runner.intelligence.higher_mind.objectives.goal_handoff import preferences_text, run_goal_handoff
 from quest_ai_runner.intelligence.mind.context_intake.reflections import ReflectionContext
@@ -251,13 +252,30 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
             if ctx["bundle"] is not None:
                 ctx["bundle"].remember_offer(self._pass_task_id or "")
                 if ctx["context_updates"]:
-                    ctx["bundle"].mark_seen()
+                    # A run that will really execute only STAGES the advance: its watermarks move when the executor
+                    # reports the task done (``settle_run_context``), so a failed run loses none of the news. A
+                    # parked suggestion has nothing to fail, and its brief already points at the written file.
+                    ctx["bundle"].mark_seen(task_id=self._pass_task_id if plan.status == "act" else None)
             if plan.status == "act":
                 self._refresh_next_steps(quest_id, ctx["current_goals"], ctx["adopted"], ctx["scope_label"], ctx["previous"], plan.notes_sink,
                                          quest_label=_quest_label(quest, quest_id), reflection_note=ctx["reflection_note"], insights_note=ctx["insights_note"])
             if ctx["adopted"] and self._pass_task_id:
                 self._close_adopted(ctx["adopted"], self._pass_task_id, quest_id, plan.notes_sink)
         return plan
+
+    def settle_run_context(self, task_id: str, status: str) -> bool:
+        """The executor's word on how a run ended: ``done`` commits the context watermarks this run staged, anything else drops them.
+
+        Best-effort and safe to call for any task (a run that staged nothing is a no-op).
+        """
+        engine = self._update_engine
+        if engine is None or not task_id:
+            return False
+        try:
+            return bool(engine.settle(task_id, succeeded=str(status) == "done"))
+        except Exception:  # noqa: BLE001 -- bookkeeping never fails a finished run
+            log.info("autopilot: could not settle the context marks of task %s", task_id, exc_info=True)
+            return False
 
     def _compose_run(self, quest: Dict[str, Any], quest_id: str, unit: Dict[str, Any], ctx: Optional[Dict[str, Any]],
                      assigned: List[str], own: str, source_text: Optional[str]) -> str:
@@ -425,8 +443,10 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
             # ONE read of everything the person said, through the engine. The reflection and the captures come back as SLOTTED updates that render
             # through the composer's own two slots (ref-tagged, so the receipt accounts for them); the general block carries everything else.
             # The notes read knows which autopilot this run is: a note aimed at another autopilot stays out, one aimed at this one leads the block.
+            folder = self._quest_folder_map.get(str(quest_id)) or ""
             bundle = self._update_engine.collect(
                 quest, card_id=quest_id, card_kind="quest", card_label=quest_label,
+                consumer=str(unit.get("id") or ""), folder=folder,
                 options={"reflections": {"periods": self._reflection_periods(scope_label)},
                          "quest_notes": {"autopilot_id": str(unit.get("id") or "")}})
             reflection_text = bundle.slot_text("reflection") or None
@@ -434,6 +454,12 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
             reflection_note = bundle.slot_summary("reflection")
             insights_note = bundle.slot_summary("insights")
             context_updates_text = bundle.as_prompt_block(exclude_slots=("reflection", "insights")) or None
+            if folder and bundle.updates and not dry_run:
+                # With a working folder the news is written there IN FULL and the brief carries a short index; without one (or on a dry run, which writes
+                # nothing) the old inline block stands.
+                written = write_context_file(bundle, folder, consumer=str(unit.get("id") or ""))
+                if written is not None:
+                    context_updates_text = index_block(bundle, written)
         else:
             # No engine: the reflection and the captures are read directly. The captures are the ones taken since THIS autopilot's own previous run
             # (the newest earlier ``autopilot_run`` row of it), so each autopilot has its own window.

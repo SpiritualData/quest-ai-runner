@@ -86,15 +86,30 @@ class Watermarks:
         except OSError as e:
             log.warning("could not persist context watermarks: %s", e)
 
-    def get(self, card_id: str, source: str) -> Optional[datetime]:
-        with self._lock:
-            return _as_utc(self._data.get(self._key(card_id, source)))
+    @staticmethod
+    def scoped(card_id: str, consumer: str = "") -> str:
+        """The key a CONSUMER's own stamps live under: ``<card>|<consumer>``; no consumer = the card itself.
 
-    def set(self, card_id: str, source: str, when: datetime) -> None:
+        Every consumer of a quest (each autopilot pass, an interactive session, a chat) has its own
+        "last looked", because one shared stamp per quest meant whichever looked first consumed the
+        news for the rest. A consumer with no stamp of its own yet is SEEDED from the old per-card
+        stamp (``get`` falls back to it), so switching to per-consumer stamps re-offers nothing.
+        """
+        consumer = str(consumer or "").strip()
+        return f"{card_id}|{consumer}" if consumer else card_id
+
+    def get(self, card_id: str, source: str, consumer: str = "") -> Optional[datetime]:
+        with self._lock:
+            own = self._data.get(self._key(self.scoped(card_id, consumer), source))
+            if own is None and consumer:
+                own = self._data.get(self._key(card_id, source))   # seed from the legacy per-card stamp
+            return _as_utc(own)
+
+    def set(self, card_id: str, source: str, when: datetime, consumer: str = "") -> None:
         if self._read_only:
             return
         with self._lock:
-            key = self._key(card_id, source)
+            key = self._key(self.scoped(card_id, consumer), source)
             existing = _as_utc(self._data.get(key))
             # Never move a watermark backwards: two lanes reading the same card would otherwise
             # re-deliver everything between them on every alternate run.
@@ -116,6 +131,81 @@ class Watermarks:
         with self._lock:
             self._snapshots[f"{card_id}:{source}:{key}"] = snapshot
             self._save()
+
+
+class PendingMarks:
+    """Watermark advances held back until the run that was handed the news SUCCEEDS.
+
+    An autopilot pass composes its brief (and collects the news) at PLAN time, but the deep run that
+    reads it happens afterwards and can fail. Advancing the watermark at plan time meant a failed
+    run silently lost everything it was handed. So a pass ``stage``s the advance under its task id,
+    and whoever learns the task's outcome calls ``commit`` (run succeeded: the watermarks move) or
+    ``discard`` (it failed: they stay, and the next pass re-collects the same news).
+
+    JSON-backed like ``Watermarks`` (a restart between plan and outcome must not lose the stage);
+    entries older than ``MAX_AGE_DAYS`` are dropped on load, so a task that never reported cannot
+    pile up forever. ``read_only`` cannot stage or commit.
+    """
+    MAX_AGE_DAYS = 7
+
+    def __init__(self, path: Optional[str] = None, *, read_only: bool = False) -> None:
+        self._path = Path(path) if path else None
+        self._read_only = bool(read_only)
+        self._data: Dict[str, Dict[str, Any]] = {}
+        self._lock = threading.Lock()
+        self._load()
+
+    def _load(self) -> None:
+        if not self._path or not self._path.exists():
+            return
+        try:
+            payload = json.loads(self._path.read_text())
+            rows = payload.get("pending") if isinstance(payload, dict) else None
+            cutoff = _utcnow().timestamp() - self.MAX_AGE_DAYS * 86400
+            if isinstance(rows, dict):
+                for task_id, row in rows.items():
+                    staged = _as_utc((row or {}).get("staged_at")) if isinstance(row, dict) else None
+                    if staged and staged.timestamp() >= cutoff:
+                        self._data[str(task_id)] = row
+        except (json.JSONDecodeError, OSError) as e:
+            log.warning("pending context marks unreadable (%s); starting fresh", e)
+
+    def _save(self) -> None:
+        if not self._path:
+            return
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._path.with_suffix(self._path.suffix + ".tmp")
+            tmp.write_text(json.dumps({"pending": self._data}, indent=2, sort_keys=True))
+            os.replace(tmp, self._path)
+        except OSError as e:
+            log.warning("could not persist pending context marks: %s", e)
+
+    @property
+    def read_only(self) -> bool:
+        return self._read_only
+
+    def stage(self, task_id: str, row: Dict[str, Any]) -> None:
+        """Hold ``row`` (``card_id``, ``consumer``, ``stamps`` {source: iso}, ``snapshots``) for ``task_id``."""
+        if self._read_only or not task_id:
+            return
+        with self._lock:
+            self._data[str(task_id)] = {**row, "staged_at": _utcnow().isoformat()}
+            self._save()
+
+    def has(self, task_id: str) -> bool:
+        with self._lock:
+            return str(task_id) in self._data
+
+    def take(self, task_id: str) -> Optional[Dict[str, Any]]:
+        """Remove and return the staged row for ``task_id`` (None when nothing was staged)."""
+        if self._read_only:
+            return None
+        with self._lock:
+            row = self._data.pop(str(task_id), None)
+            if row is not None:
+                self._save()
+            return row
 
 
 class RelayedItems:
@@ -253,6 +343,9 @@ class CollectRequest:
     # What the source wants stored for its next look, by key. Copied to the ``SourceReport`` and
     # only written when a run is actually handed the result (``ContextUpdates.mark_seen``).
     remembered: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    # The quest's working folder, when the caller or the deployment's ``quest_folder_map`` knows it. Sources
+    # that read files the work owns (``folder_files``) use it; every other source ignores it.
+    folder: str = ""
 
     def prior_snapshot(self, key: str) -> Optional[Dict[str, Any]]:
         """What this source stored under ``key`` the last time a run was handed its results."""

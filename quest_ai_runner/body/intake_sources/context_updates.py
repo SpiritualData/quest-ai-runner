@@ -60,8 +60,11 @@ from quest_ai_runner.body.intake_sources.context_update_types import (
     SourceReport, _as_utc, _utcnow, log)
 from quest_ai_runner.body.intake_sources.context_update_receipts import (
     parse_dispositions, parse_manifest, parse_usage_notes, render_receipt, strip_usage_block)
-from quest_ai_runner.body.intake_sources.context_update_state import CollectRequest, RelayedItems, Watermarks, _card_label, relay_log_path_for
-from quest_ai_runner.body.intake_sources.context_update_bundle import ContextUpdates
+from quest_ai_runner.body.intake_sources.context_update_state import (
+    CollectRequest, PendingMarks, RelayedItems, Watermarks, _card_label, relay_log_path_for)
+from quest_ai_runner.body.intake_sources.context_update_bundle import ContextUpdates, apply_marks
+from quest_ai_runner.body.intake_sources.context_sources_collections import QuestCollectionsSource
+from quest_ai_runner.body.intake_sources.context_sources_folder import FolderFilesSource
 from quest_ai_runner.body.intake_sources.context_sources_base import ContextSource, _reply_channel
 from quest_ai_runner.body.intake_sources.context_sources_quest import (
     CollectionEntriesSource, DecisionsSource, GoalUpdatesSource, InsightsSource, QuestEventsSource, QuestNotesSource, ReflectionsSource)
@@ -178,6 +181,8 @@ class UpdateEngine:
                                                     Optional[set]]] = None,
                  ledger: Any = None,
                  relay_log: Any = None,
+                 pending: Optional[PendingMarks] = None,
+                 folder_resolver: Optional[Callable[[str], Optional[str]]] = None,
                  first_look_days: int = FIRST_LOOK_DAYS,
                  max_updates: int = MAX_UPDATES,
                  now_fn: Optional[Callable[[], datetime]] = None) -> None:
@@ -188,6 +193,8 @@ class UpdateEngine:
         self._admission_judge = admission_judge
         self._ledger = ledger
         self._relay_log = relay_log
+        self._pending = pending
+        self._folder_resolver = folder_resolver
         self._always = tuple(always or ())
         self._first_look = timedelta(days=max(1, int(first_look_days)))
         self._max_updates = max(1, int(max_updates))
@@ -213,6 +220,8 @@ class UpdateEngine:
             QuestEventsSource(),
             DecisionsSource(),
             CollectionEntriesSource(),
+            QuestCollectionsSource(),
+            FolderFilesSource(),
             DriveCommentsSource(drive_comments),
             DriveChangesSource(drive_comments),
             InboundMailSource(inbound_mail),
@@ -367,12 +376,40 @@ class UpdateEngine:
                 raw={"tracked": True, "state": item.state, "kind": item.kind},
             ))
 
+    def folder_for(self, quest_id: str) -> str:
+        """The quest's working folder per the deployment's resolver, or "" (never raises)."""
+        if self._folder_resolver is None or not quest_id:
+            return ""
+        try:
+            return str(self._folder_resolver(quest_id) or "")
+        except Exception:  # noqa: BLE001 -- a folder is a refinement of collection
+            return ""
+
+    def settle(self, task_id: str, *, succeeded: bool) -> bool:
+        """The outcome of the run that was handed a staged bundle: move its watermarks (success) or drop the stage (failure).
+
+        Returns whether something was committed. A task that staged nothing (a skipped or dry run, a run
+        that was handed no news) is a no-op, so any caller that learns an outcome may call this blindly.
+        """
+        if self._pending is None or not task_id:
+            return False
+        row = self._pending.take(task_id)
+        if not row or not succeeded:
+            return False
+        apply_marks(self._watermarks, str(row.get("card_id") or ""), str(row.get("consumer") or ""),
+                    dict(row.get("stamps") or {}), dict(row.get("snapshots") or {}))
+        return True
+
     def collect(self, card: Dict[str, Any], *, card_id: str = "", card_kind: str = "quest",
-                since: Optional[datetime] = None,
+                since: Optional[datetime] = None, consumer: str = "", folder: str = "",
                 card_label: str = "",
                 sources: Optional[Sequence[str]] = None,
                 options: Optional[Dict[str, Dict[str, Any]]] = None) -> ContextUpdates:
         """Run every source this card watches and return one bundle.
+
+        ``consumer`` names who is looking (an autopilot id, ``interactive``...): its watermarks are its own, so one
+        consumer reading the news never consumes it for another. ``folder`` is the quest's working folder when the
+        caller knows it (else the engine's ``folder_resolver``).
 
         ``since`` overrides the stored watermark for EVERY source, which is what a caller with its
         own notion of "last time" (an autopilot pass holding ``last_pass_at``) passes in. Left
@@ -404,6 +441,10 @@ class UpdateEngine:
             collected_at=now,
         )
         bundle.card_kind = card_kind
+        bundle.consumer = str(consumer or "").strip()
+        bundle._pending = self._pending
+        scoped_id = Watermarks.scoped(cid, bundle.consumer)
+        folder = folder or self.folder_for(cid)
         bundle._watermarks = self._watermarks
         bundle._ledger = self._ledger
         bundle._card = card or {}
@@ -426,14 +467,15 @@ class UpdateEngine:
                     source=name, spec=spec, error="no such source is registered"))
                 log.warning("context updates: card %s asks for unknown source %r", cid, name)
                 continue
-            last_look = since or self._watermarks.get(cid, name)
+            last_look = since or self._watermarks.get(cid, name, bundle.consumer)
             window = last_look or (now - self._first_look)
             report = SourceReport(source=name, spec=spec, since=window)
             request = CollectRequest(
                 card=card, card_id=cid, card_kind=card_kind, spec=spec,
                 card_label=bundle.card_label, since=window, first_look=last_look is None,
-                now=now, client=self._client, cache=self._cache, ledger=self._ledger,
-                snapshot_reader=(lambda key, n=name: self._watermarks.get_snapshot(cid, n, key)))
+                now=now, client=self._client, cache=self._cache, ledger=self._ledger, folder=folder,
+                snapshot_reader=(lambda key, n=name: (self._watermarks.get_snapshot(scoped_id, n, key)
+                                                      or self._watermarks.get_snapshot(cid, n, key))))
             try:
                 found = list(source.collect(request) or [])
             except SourceGap as e:
@@ -510,6 +552,13 @@ def watermark_path_for(configured: Optional[str] = None,
     return str(p.with_name(p.stem + "_context_watermarks.json"))
 
 
+def pending_path_for(watermark_path: Optional[str] = None, state_path: Optional[str] = None) -> Optional[str]:
+    """Where staged watermark advances live: beside the watermark file (else beside the state file)."""
+    base = watermark_path or (str(Path(state_path).with_name(Path(state_path).stem + "_context_watermarks.json"))
+                              if state_path else None)
+    return str(Path(base).with_name(Path(base).stem + "_pending.json")) if base else None
+
+
 def build_update_engine(cfg: Any = None, client: Any = None, *,
                         state_path: Optional[str] = None,
                         read_only: bool = False) -> Optional[UpdateEngine]:
@@ -536,6 +585,9 @@ def build_update_engine(cfg: Any = None, client: Any = None, *,
     return UpdateEngine(
         client,
         watermarks=Watermarks(path, read_only=read_only),
+        pending=PendingMarks(pending_path_for(path, state_path), read_only=read_only),
+        # read at call time: the map is mutable (a quest bound to a folder mid-life)
+        folder_resolver=(lambda quest_id: (getattr(cfg, "quest_folder_map", None) or {}).get(str(quest_id))) if cfg is not None else None,
         ledger=build_ledger(cfg, state_path=state_path, read_only=read_only),
         relay_log=RelayedItems(relay_path, read_only=read_only),
         drive_comments=getattr(cfg, "drive_comments", None),

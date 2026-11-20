@@ -673,6 +673,9 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         # act on them: they are acted on, so they leave the "waiting for your AI" queue.
         if outcome.status == "done" and self._context_bundle is not None:
             self._safe(lambda: self._context_bundle.settle_answered_asks(task_id))
+        # The news an autopilot run was handed advances its watermarks only now, once the run is known to have succeeded.
+        if self._autopilot is not None:
+            self._safe(lambda: self._autopilot.settle_run_context(task_id, outcome.status))
         return outcome
 
     def measure_milestone_work(self, text: str, result: OrchestratorResult) -> None:

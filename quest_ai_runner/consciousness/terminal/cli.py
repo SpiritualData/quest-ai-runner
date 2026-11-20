@@ -439,7 +439,7 @@ from quest_ai_runner.consciousness.request_intake.poller import Poller
 
 from quest_ai_runner.body.configuration.cli_config import _ask_classifier, _config_from_env, _goal_judge, _model_provider_from_env, _quest_model
 from quest_ai_runner.consciousness.terminal.cli_context import (
-    _cmd_bootstrap, _cmd_context, _cmd_paste_context, _cmd_search_context, select_card_ids_for_text)
+    _cmd_bootstrap, _cmd_context, _cmd_context_updates, _cmd_paste_context, _cmd_search_context, select_card_ids_for_text)
 from quest_ai_runner.consciousness.terminal.cli_chat import _cmd_chat
 from quest_ai_runner.consciousness.terminal.cli_quest import (
     _cmd_create_goal, _cmd_reconcile_plan, _cmd_send, _cmd_quest_folder, _cmd_sync_quest_folder, _quest_method_is_read_only, _run_quest_command)
@@ -482,6 +482,7 @@ def main(argv=None) -> int:
         "reconcile-plan": _cmd_reconcile_plan,
         "create-goal": _cmd_create_goal,
         "context": _cmd_context,
+        "context-updates": _cmd_context_updates,
         "cards": run_cards_command,
         "sync-quest-folder": _cmd_sync_quest_folder,
         "quest-folder": _cmd_quest_folder,

@@ -259,27 +259,44 @@ class ContextEntriesMixin:
                            body={"pref": str(pref).strip(), "source": source}, label="Saving the context preference")
 
     def list_collections(self) -> List[Dict[str, Any]]:
-        """GET /api/data/collections -- every collection the caller owns.
+        """GET /api/data/collections -- EVERY collection the caller owns, all pages.
 
-        Needed to resolve a collection by NAME. A card that watches a habit is far more readable,
-        and far more durable across a rebuild, saying "Focus on PhD Dissertation" than carrying an
-        opaque id; this is what turns the one into the other. Returns [] on any error.
+        Needed to resolve a collection by NAME, and to discover which collections belong to a quest.
+        The route returns one page (20 by default, 122 on a real account), so this asks for the
+        largest page and follows ``pagination.has_next`` until the list is complete. A page that
+        errors after the first returns what was read so far. Returns [] on any error.
         """
+        collected: List[Dict[str, Any]] = []
+        page = 0
         try:
             self._require()
-            resp = self._request("GET", "/api/data/collections") or {}
-            if isinstance(resp, list):
-                return resp
-            data = resp.get("data") if isinstance(resp, dict) else None
-            if isinstance(data, dict):
-                items = data.get("items")
-                if isinstance(items, list):
-                    return items
-            items = resp.get("items") if isinstance(resp, dict) else None
-            return items if isinstance(items, list) else []
+            while page < 50:
+                resp = self._request("GET", "/api/data/collections",
+                                     params={"limit": 500, "page": page}) or {}
+                rows, pagination = self._collection_rows(resp)
+                collected.extend(r for r in rows if isinstance(r, dict))
+                if not (isinstance(pagination, dict) and pagination.get("has_next")) or not rows:
+                    break
+                page += 1
+            return collected
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_collections failed: %s", e)
-            return []
+            return collected
+
+    @staticmethod
+    def _collection_rows(resp: Any) -> tuple:
+        """``(rows, pagination)`` from any of the shapes the collections route has answered with."""
+        if isinstance(resp, list):
+            return resp, None
+        if not isinstance(resp, dict):
+            return [], None
+        data = resp.get("data")
+        if isinstance(data, list):
+            return data, resp.get("pagination")
+        if isinstance(data, dict) and isinstance(data.get("items"), list):
+            return data["items"], data.get("pagination") or resp.get("pagination")
+        items = resp.get("items")
+        return (items if isinstance(items, list) else []), resp.get("pagination")
 
     def list_collection_entries(self, collection_id: str, *, page: int = 0,
                                 limit: int = 50) -> Dict[str, Any]:

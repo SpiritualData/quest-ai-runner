@@ -204,6 +204,26 @@ def add_context_command(sub) -> None:
                             "also works. Environment variables always win over the file.")
 
 
+def add_context_updates_command(sub) -> None:
+    """The `context-updates` subcommand."""
+    cu_p = sub.add_parser(
+        "context-updates",
+        help="write everything new on a quest since THIS consumer last looked to CONTEXT_UPDATES.md in the quest's "
+             "folder and print the short index (the same engine an autopilot pass uses). Does not move the "
+             "watermark unless --mark-seen.")
+    cu_p.add_argument("quest_id", help="the quest to read")
+    cu_p.add_argument("--folder", default=None, metavar="PATH",
+                      help="the quest's working folder (default: the lane's quest_folder_map entry)")
+    cu_p.add_argument("--consumer", default="interactive", metavar="NAME",
+                      help="whose last look to read from (default: interactive; an autopilot pass uses its autopilot id)")
+    cu_p.add_argument("--since", default=None, metavar="WHEN",
+                      help="ISO-8601 start of the window, instead of the consumer's stored stamp")
+    cu_p.add_argument("--mark-seen", action="store_true", dest="mark_seen",
+                      help="advance this consumer's watermarks after writing (default: leave them)")
+    cu_p.add_argument("--json", action="store_true", dest="as_json", help="print the bundle as JSON")
+    cu_p.add_argument("--config", default=None, metavar="PATH", help="TOML config file; QAR_CONFIG_FILE also works")
+
+
 def add_cards_command(sub) -> None:
     """The `cards` subcommand."""
     cards_p = sub.add_parser(
@@ -364,6 +384,7 @@ def _build_parser() -> argparse.ArgumentParser:
     add_paste_context_command(sub)
     add_search_context_command(sub)
     add_context_command(sub)
+    add_context_updates_command(sub)
     add_cards_command(sub)
     add_sync_quest_folder_command(sub)
     add_quest_folder_command(sub)

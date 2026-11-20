@@ -49,8 +49,12 @@ FIRST_LOOK_DAYS = 14
 # nothing at all and re-propose work the person had already done. Making it opt-in would
 # reproduce the exact ``quest_notes`` failure above under a new name: a signal that exists but
 # that a deployment has to remember to switch on is a signal that is effectively off.
+#
+# ``quest_collections`` and ``folder_files`` are on it for the same reason, and are card-scoped too: the first
+# finds the habits, journals and trackers that belong to THIS quest (linked, or filed under its category) by
+# itself, and the second reads the quest's own working folder. Neither needs a spec to do its default job.
 DEFAULT_ALWAYS: Sequence[str] = ("reflections", "insights", "quest_notes", "goal_updates",
-                                "quest_events", "decisions")
+                                "quest_events", "decisions", "quest_collections", "folder_files")
 
 
 # Looking for where the previous AUTOPILOT RUN's own output comes from? It is NOT a source here.

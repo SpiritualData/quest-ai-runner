@@ -11,7 +11,21 @@ from datetime import datetime
 from quest_ai_runner.body.intake_sources.context_update_types import (
     BLOCK_END, BLOCK_START, ContextUpdate, MAX_BODY_CHARS, MAX_PERSON_BODY_CHARS, PERSON_BODY_BUDGET, SourceReport, _OLDEST, _utcnow, log)
 from quest_ai_runner.body.intake_sources.context_update_receipts import _OFFER_PREAMBLE, usage_receipt_gate
-from quest_ai_runner.body.intake_sources.context_update_state import Watermarks
+from quest_ai_runner.body.intake_sources.context_update_state import PendingMarks, Watermarks
+
+
+def apply_marks(watermarks: "Watermarks", card_id: str, consumer: str,
+                stamps: Dict[str, str], snapshots: Dict[str, Dict[str, Any]]) -> None:
+    """Move ``watermarks`` to ``stamps`` ({source: ISO time}) and store each source's snapshots."""
+    from quest_ai_runner.body.intake_sources.context_update_types import _as_utc
+    scoped = Watermarks.scoped(card_id, consumer)
+    for source, when in (stamps or {}).items():
+        moment = _as_utc(when)
+        if moment is not None:
+            watermarks.set(card_id, source, moment, consumer)
+    for source, snaps in (snapshots or {}).items():
+        for key, snapshot in (snaps or {}).items():
+            watermarks.set_snapshot(scoped, source, key, snapshot)
 
 
 @dataclass
@@ -48,6 +62,11 @@ class ContextUpdates:
     # The source names whose admitted items get posted onto the quest (see
     # ``_BaseSource.relay_to_quest``). Only these ever reach relay_admitted's loop.
     relay_sources: frozenset = frozenset()
+    # Who is looking: the autopilot id for a pass, ``interactive`` for a terminal session, or a
+    # name a caller passes. Its watermarks are its own (see ``Watermarks.scoped``).
+    consumer: str = ""
+    # Where watermark advances wait for a run's outcome (see ``PendingMarks``); None = advance at once.
+    _pending: Optional["PendingMarks"] = None
 
     def __bool__(self) -> bool:
         return bool(self.updates)
@@ -232,12 +251,17 @@ class ContextUpdates:
             ],
         }
 
-    def mark_seen(self, *, at: Optional[datetime] = None) -> None:
-        """Advance each checked source's watermark for this card.
+    def mark_seen(self, *, at: Optional[datetime] = None, task_id: Optional[str] = None) -> None:
+        """Advance each checked source's watermark for this card and consumer.
 
         Called by the caller AFTER the updates have actually been handed to a run, never at
         collection time: a pass that collects and then fails to compose anything must not have
         consumed the person's comment on the way past.
+
+        With ``task_id`` (and a pending store on the engine) the advance is only STAGED under that
+        task: the watermarks move when whoever learns the task's outcome calls
+        ``UpdateEngine.settle(task_id, succeeded=True)``, and stay when it failed. Being handed the
+        news is not the same as a run having used it.
 
         Only sources that reported WITHOUT error advance. A source that could not be read has not
         been seen, and pretending otherwise turns one API blip into permanently lost context.
@@ -246,11 +270,13 @@ class ContextUpdates:
             return
         stamp = at or self.collected_at
         if self._watermarks is not None:
-            for r in self.reports:
-                if r.ok:
-                    self._watermarks.set(self.card_id, r.source, stamp)
-                    for key, snapshot in (r.snapshots or {}).items():
-                        self._watermarks.set_snapshot(self.card_id, r.source, key, snapshot)
+            stamps = {r.source: stamp.isoformat() for r in self.reports if r.ok}
+            snaps = {r.source: dict(r.snapshots) for r in self.reports if r.ok and r.snapshots}
+            if task_id and self._pending is not None and not self._pending.read_only:
+                self._pending.stage(task_id, {"card_id": self.card_id, "consumer": self.consumer,
+                                              "stamps": stamps, "snapshots": snaps})
+            else:
+                apply_marks(self._watermarks, self.card_id, self.consumer, stamps, snaps)
         # The same moment, the same reason: this is when an item was actually put in front of a
         # run, which is what "offered" means. It records existence and nothing else -- being shown
         # something is not acting on it, and the ledger is careful about the difference.

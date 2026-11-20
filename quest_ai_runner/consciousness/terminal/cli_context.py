@@ -552,3 +552,58 @@ def _cmd_search_context(args, log) -> int:
             if len(all_items) > 8:
                 print(f"  ... +{len(all_items) - 8} more")
     return 0
+
+
+def _cmd_context_updates(args, log) -> int:
+    """Run `context-updates QUEST_ID`: collect what is new for one consumer, write CONTEXT_UPDATES.md, print the index.
+
+    The SAME engine an autopilot pass uses (``build_update_engine``), so a source added once shows up here too.
+    A read by default: the consumer's watermarks only move with ``--mark-seen``.
+    """
+    import json as _json
+    from datetime import datetime, timezone
+
+    from quest_ai_runner.body.configuration.config import build_orchestrator
+    from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
+    from quest_ai_runner.body.intake_sources.context_updates import build_update_engine
+    from quest_ai_runner.body.intake_sources.context_updates_file import counts_line, index_block, write_context_file
+
+    cfg = _config_from_env(getattr(args, "config", None))
+    build_orchestrator(cfg)
+    since = None
+    if args.since:
+        try:
+            since = datetime.fromisoformat(args.since.strip().replace("Z", "+00:00"))
+        except ValueError:
+            log.error("--since %r is not an ISO-8601 timestamp", args.since)
+            return 1
+        if since.tzinfo is None:
+            since = since.replace(tzinfo=timezone.utc)
+    client = QuestClient(cfg.quest_base_url, cfg.quest_api_key, team_id=cfg.team_id)
+    engine = build_update_engine(cfg, client, state_path=getattr(cfg, "state_path", None), read_only=not args.mark_seen)
+    if engine is None:
+        log.error("context updates are switched off for this config")
+        return 1
+    folder = args.folder or (getattr(cfg, "quest_folder_map", None) or {}).get(args.quest_id) or ""
+    quest = client.get_quest(args.quest_id)
+    bundle = engine.collect(quest, card_id=args.quest_id, card_kind="quest", since=since,
+                            consumer=args.consumer, folder=folder)
+    written = write_context_file(bundle, folder, consumer=args.consumer) if folder else None
+    if args.as_json:
+        payload = bundle.as_dict()
+        payload["consumer"] = args.consumer
+        payload["file"] = str(written) if written else None
+        print(_json.dumps(payload, indent=2))
+    else:
+        print(f"{len(bundle.updates)} new item(s) for consumer {args.consumer!r}: {counts_line(bundle)}")
+        if written:
+            print(index_block(bundle, written))
+        elif bundle.updates:
+            print(bundle.as_prompt_block(ask_for_receipt=False))
+            print("(no working folder known: pass --folder or map the quest in quest_folder_map to get CONTEXT_UPDATES.md)")
+    if args.mark_seen:
+        bundle.mark_seen()
+        print(f"Marked seen for {args.consumer!r}.")
+    else:
+        print("Watermark not moved (use --mark-seen).")
+    return 0
