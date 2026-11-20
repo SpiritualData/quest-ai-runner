@@ -313,6 +313,10 @@ class ContextEntriesMixin:
         """POST /api/data/collections/{id}/stop-habit: stop treating a habit as a habit; its entries stay and its completion field is archived."""
         return self._write("POST", f"/api/data/collections/{collection_id}/stop-habit", body={}, label="Turning the habit back into a collection")
 
+    def rename_collection_option(self, collection_id: str, field_id: str, old: str, new: str) -> WriteResult:
+        """POST /api/data/collections/{id}/rename-tag: rename one option value of a tags / radio / dropdown / multiple-choice field everywhere it is stored (options, default, every entry incl. extra fields, formulas quoting it); habits work too. Renaming onto an existing option merges."""
+        return self._write("POST", f"/api/data/collections/{collection_id}/rename-tag", body={"fieldId": field_id, "oldTag": old, "newTag": new}, label="Renaming the option")
+
     def mark_insight_acted_on(self, entry_id: str, collection_id: str,
                               action_taken_description: str = "") -> WriteResult:
         """PATCH /api/data/insights/mark-acted-on — tick one insight's ``acted_on`` box.
