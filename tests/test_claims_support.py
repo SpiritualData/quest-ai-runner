@@ -123,3 +123,9 @@ def test_unsupported_flag_alongside_a_real_gap_does_not_trigger_the_support_rewr
         goal_verdicts=[both, {"met": True}], answer_text=ADVICE)
     run(provider)
     assert provider.support_rewrites == 0
+
+
+def test_support_rewrite_keeps_a_standard_fact_that_answers_the_question():
+    from quest_ai_runner.self.integrity.prompts.auxiliary_prompts import SUPPORT_REWRITE_STEER
+    steer = SUPPORT_REWRITE_STEER.format(reason="a conversion stated as certain", text="350 F is about 175 C.")
+    assert "unit conversion" in steer and "never removed" in steer

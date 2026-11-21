@@ -611,7 +611,11 @@ SUPPORT_REWRITE_STEER = (
     "Rewrite it once. For each such claim do one of these: state its basis in a few words (the "
     "person's own data, something read this turn, a named source, or research findings), mark it as "
     "general knowledge and say how sure you are, say plainly that you have no evidence for it, or "
-    "remove it. Never invent a source. Keep everything that is supported, keep the reply as short as "
+    "remove it. A well-established standard fact (a unit conversion, a common recipe or safety "
+    "figure, a definition) that answers what the person asked is kept with its number and marked "
+    "as general knowledge, never removed or replaced by advice to check a manual; only a claim "
+    "about the person's own data or about a fact you cannot stand behind is removed. Never invent a "
+    "source. Keep everything that is supported, keep the reply as short as "
     "before, and add no new claims. Do not use em dashes.\n\n"
     "--- YOUR PREVIOUS ANSWER ---\n{text}"
 )
