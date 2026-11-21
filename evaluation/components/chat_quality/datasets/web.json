@@ -283,5 +283,20 @@
    "web_read": true
   },
   "evidence_notes": "A 401 or sign-in redirect is reported as not_shared."
+ },
+ {
+  "id": "WEB-019",
+  "dataset": "explicit",
+  "area": "general knowledge: two-part unit conversion",
+  "quest_key": "family",
+  "message": "my cake recipe says bake at 375 F, what is that in celsius and what do i set a fan oven to",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply gives a Celsius figure between 188 and 192 degrees for 375 F",
+   "The reply gives a fan oven setting that is lower than the conventional figure, about 20 degrees lower (roughly 170 degrees)",
+   "The reply does not answer with only advice to check the oven manual, and it marks the figures as general knowledge once, in a few words"
+  ],
+  "evidence_notes": "Failed in the real app on 20 Nov (375 F) and 21 Nov (400 F): numbers dropped by the support rewrite, fix in 96985415."
  }
 ]
