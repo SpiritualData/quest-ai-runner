@@ -46,6 +46,13 @@ from quest_ai_runner.intelligence.critical_thinking.unmet_goal import pursue_bef
 from quest_ai_runner.consciousness.feedback_learning.candidate_cases import record_candidate, turn_signals
 
 
+def support_rewrite_lost_answer(before: str, after: str) -> bool:
+    """True when a support rewrite threw away the answer: the draft had numbers, the rewrite has
+    none and is under 40 percent of its length (a bare label like "General knowledge.")."""
+    before, after = (before or "").strip(), (after or "").strip()
+    return bool(re.search(r"\d", before)) and not re.search(r"\d", after) and len(after) < 0.4 * len(before)
+
+
 class RunCloseMixin:
     """Closing a turn: deferred deep work, goal verification of the answer, and the final result."""
 
@@ -720,9 +727,12 @@ class RunCloseMixin:
                         rs.support_rewritten = True
                         if emit is not None:
                             emit.status("Adding the basis for the claims in the reply…")
+                        _before_support = rs.text
                         rs.text = self.keep_landed_work_reported(rs, _gen_answer(
                             SUPPORT_REWRITE_STEER.format(
                                 reason=verdict.get("reason") or "see the claims above", text=rs.text)))
+                        if support_rewrite_lost_answer(_before_support, rs.text):
+                            rs.text = _before_support.rstrip() + "\n\n(General knowledge, not checked against your data.)"
                         _attempt += 1
                         continue
                     # Goal not met: surface the current answer as a milestone so the user sees

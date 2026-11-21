@@ -129,3 +129,11 @@ def test_support_rewrite_keeps_a_standard_fact_that_answers_the_question():
     from quest_ai_runner.self.integrity.prompts.auxiliary_prompts import SUPPORT_REWRITE_STEER
     steer = SUPPORT_REWRITE_STEER.format(reason="a conversion stated as certain", text="350 F is about 175 C.")
     assert "unit conversion" in steer and "never removed" in steer
+
+
+def test_support_rewrite_lost_answer_guard():
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_run_close import support_rewrite_lost_answer
+    draft = "500 ml is about 16.9 US fluid ounces, or about 2.1 US cups."
+    assert support_rewrite_lost_answer(draft, "General knowledge.")
+    assert not support_rewrite_lost_answer(draft, "About 16.9 ounces, general knowledge.")
+    assert not support_rewrite_lost_answer("Go to bed early.", "No evidence for that.")
