@@ -139,3 +139,10 @@ def test_support_rewrite_lost_answer_guard():
     assert not support_rewrite_lost_answer("Go to bed early.", "No evidence for that.")
     # A removed claim about the person's own data stays removed.
     assert not support_rewrite_lost_answer("You logged 12 hours of meditation this week.", "I can't see your logs.")
+    # A rewrite that mentions general knowledge but also replaces the answer is not a bare label.
+    logs = ("You logged 14 workouts this month and your average sleep was 6.2 hours, which is why you feel tired. "
+            "Keep the pace for the next three weeks and you will see steady improvement across every category you track.")
+    assert not support_rewrite_lost_answer(logs, "I can't see your logs. As general knowledge, sleep matters.")
+    long_draft = draft + " A metric cup is 250 ml, so 500 ml is two metric cups, slightly more than two US cups."
+    assert support_rewrite_lost_answer(long_draft, "General knowledge, not checked against your data.")
+    assert support_rewrite_lost_answer(long_draft, "This is general knowledge.")

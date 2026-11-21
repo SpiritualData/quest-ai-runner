@@ -46,14 +46,23 @@ from quest_ai_runner.intelligence.critical_thinking.unmet_goal import pursue_bef
 from quest_ai_runner.consciousness.feedback_learning.candidate_cases import record_candidate, turn_signals
 
 
+#: A rewrite that is nothing but the general knowledge label, e.g. "General knowledge." or
+#: "This is general knowledge, not checked against your data." Anything more is a real rewrite.
+_BARE_GENERAL_KNOWLEDGE_LABEL = re.compile(
+    r"^\W*(?:this\s+is\s+)?general\s+knowledge(?:\W+not\s+checked(?:\s+against\s+your\s+data)?)?\W*$",
+    re.IGNORECASE)
+
+
 def support_rewrite_lost_answer(before: str, after: str) -> bool:
     """True when a support rewrite threw away the answer: the draft had numbers, the rewrite has
-    none, is under 40 percent of its length, and is itself a general knowledge label ("General knowledge.").
-    A short rewrite that removed a claim about the person's own data ("I can't see your logs.") is not this
-    case: restoring the draft there would put the unsupported claim back under a general knowledge note."""
+    none, is under 40 percent of its length, and is ONLY a general knowledge label ("General knowledge.").
+    A short rewrite that removed a claim about the person's own data ("I can't see your logs.", or
+    "I can't see your logs. As general knowledge, sleep matters.") is not this case: restoring the draft
+    there would put the unsupported claim back under a general knowledge note, so the label has to be the
+    whole rewrite, not a phrase inside one."""
     before, after = (before or "").strip(), (after or "").strip()
     return (bool(re.search(r"\d", before)) and not re.search(r"\d", after) and len(after) < 0.4 * len(before)
-            and "general knowledge" in after.lower())
+            and bool(_BARE_GENERAL_KNOWLEDGE_LABEL.match(after)))
 
 
 class RunCloseMixin:
