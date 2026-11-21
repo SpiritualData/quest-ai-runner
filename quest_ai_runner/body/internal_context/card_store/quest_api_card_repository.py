@@ -37,6 +37,7 @@ the cache's stored listing. A cache is passed as ``cache=``. See ``CardCache``.
 """
 from __future__ import annotations
 
+import gzip
 import json
 import logging
 import os
@@ -430,10 +431,15 @@ class QuestApiCardRepository:
         if params:
             url = f"{url}?{urllib.parse.urlencode(params)}"
         data = json.dumps(body, default=str).encode("utf-8") if body is not None else None
-        req = urllib.request.Request(url, data=data, headers=self._headers(), method=method)
+        headers = self._headers()
+        # Ask for a compressed reply (urllib sends no Accept-Encoding by default, and a card list came down plain).
+        headers["Accept-Encoding"] = "gzip"
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
                 raw = resp.read()
+                if str(resp.headers.get("Content-Encoding", "")).lower() == "gzip" and raw:
+                    raw = gzip.decompress(raw)
                 reply = json.loads(raw) if raw else None
         except urllib.error.HTTPError as exc:
             detail = ""
