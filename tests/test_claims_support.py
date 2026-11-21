@@ -137,3 +137,5 @@ def test_support_rewrite_lost_answer_guard():
     assert support_rewrite_lost_answer(draft, "General knowledge.")
     assert not support_rewrite_lost_answer(draft, "About 16.9 ounces, general knowledge.")
     assert not support_rewrite_lost_answer("Go to bed early.", "No evidence for that.")
+    # A removed claim about the person's own data stays removed.
+    assert not support_rewrite_lost_answer("You logged 12 hours of meditation this week.", "I can't see your logs.")

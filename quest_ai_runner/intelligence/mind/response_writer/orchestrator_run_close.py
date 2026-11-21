@@ -48,9 +48,12 @@ from quest_ai_runner.consciousness.feedback_learning.candidate_cases import reco
 
 def support_rewrite_lost_answer(before: str, after: str) -> bool:
     """True when a support rewrite threw away the answer: the draft had numbers, the rewrite has
-    none and is under 40 percent of its length (a bare label like "General knowledge.")."""
+    none, is under 40 percent of its length, and is itself a general knowledge label ("General knowledge.").
+    A short rewrite that removed a claim about the person's own data ("I can't see your logs.") is not this
+    case: restoring the draft there would put the unsupported claim back under a general knowledge note."""
     before, after = (before or "").strip(), (after or "").strip()
-    return bool(re.search(r"\d", before)) and not re.search(r"\d", after) and len(after) < 0.4 * len(before)
+    return (bool(re.search(r"\d", before)) and not re.search(r"\d", after) and len(after) < 0.4 * len(before)
+            and "general knowledge" in after.lower())
 
 
 class RunCloseMixin:
