@@ -12578,3 +12578,8 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-11-21,learn_by_example,live_examples,37,37,37/37,0/0,0,0,0,0.0,6.5,7ea8945a,80050d75,none,"clean 7/7, compile 6/6, config_file 1/1, documented 7/7, import 6/6, run 8/8, stub 2/2",,,
 2026-11-21,hub_of_hubs,registry_scan,278,256,256/278,0/0,0,0,0,0.0,0.0,7ea8945a,bc61fb2a,none,"checks passed 256/278 (by_config 3/11, core_clean 12/12, fake_hub 7/11, fresh 74/74, no_reinvented 72/74, registered 74/74, seam 7/11, selectable 7/11); registry reading (the same for every implementation): score 0.799 = mean(coverage 1.00, integration-by-config 0.38, no reinvented integration 0....",,,
 2026-11-21,conversation_recall,session_files,10,9,9/10,0/0,0,0,0,0.0,0.0,7ea8945a,91ee126a,none,"right conversations recalled 9/10, cross-user leaks 0",,,
+2026-11-21,run_queued_tasks,qar_runner,43,43,43/43,0/0,0,0,0,0.0,22.9,1b202f52,00f3bf83,none,"folder_owner 4/4, folder_sync 7/7, lane_args 3/3, lane_clock 4/4, lane_env_file 3/3, persona_select 10/10, task_lifecycle 12/12",,,
+2026-11-21,deep_run,goal_contract,53,53,53/53,0/0,0,0,0,0.0,2.1,1b202f52,ae7e2b22,none,"envelope_no_work 5/5, escalation_id 7/7, goal_contract 5/5, goal_kwargs 2/2, goal_loop 9/9, goal_prompt 5/5, resume_missing 5/5, review_fail_open 4/4, review_parse 7/7, worker_output 4/4",,,
+2026-11-21,deep_runner,subprocess_runner,11,11,11/11,0/0,0,0,0,0.0,10.6,1b202f52,61d37336,none,run_worker 11/11,,,
+2026-11-21,escalate_to_a_human,quest_decision_sink,15,15,15/15,0/0,0,0,0,0.0,1.9,1b202f52,597d556f,none,escalate 15/15,,,
+2026-11-21,write_files,bounded_writer,20,20,20/20,0/0,0,0,0,0.0,0.0,1b202f52,5a1bc756,none,write 20/20,,,
