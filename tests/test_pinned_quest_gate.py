@@ -88,3 +88,62 @@ def test_pinned_clarify_without_snapshot_still_names_the_quest_to_the_writer(mon
     assert named and "Never ask which quest" in named[0]["text"]
     assert state.plan.action == "answer" and state.plan.needs_records is True
     assert getattr(state.plan, "reply_shape", None) != "clarify"
+
+
+# --- terminal gate: every final clarify on a pinned chat becomes an answer -------------------------------------------------------------------
+from quest_ai_runner.intelligence.mind.response_writer import orchestrator_run_answer as _ra
+from quest_ai_runner.body.internal_context.adapters_values import PlanDecision
+
+
+def _route_cls():
+    return next(v for k, v in vars(_ra).items() if isinstance(v, type) and hasattr(v, "_answer_pinned_instead_of_clarify"))
+
+
+class _Route(_route_cls()):
+    tools = object()
+
+    def __init__(self):
+        self.calls = 0
+
+    @staticmethod
+    def _meta_quest_ids(meta):
+        ids = [meta["quest_id"]] if meta.get("quest_id") else []
+        return ids + [q for q in meta.get("quest_ids", []) if q not in ids]
+
+    def answer_pinned_quest(self, rs, ctx_meta, emit):
+        self.calls += 1
+        rs.plan = PlanDecision(action="answer", user_intent="ask", needs_records=False, rationale="snapshot")
+        rs.status_snapshot = True
+
+
+def _rs(final="clarify", quest_id=None, quest_ids=("quest_pinned",), done=False):
+    plan = PlanDecision(action=final, user_intent="ask", needs_records=False, rationale="r")
+    return SimpleNamespace(message_is_user_turn=True, plan=plan, final=final, quest_id=quest_id, _ctx_meta={"quest_ids": list(quest_ids)},
+                           gathered=[], emit=_Emit(), pinned_quest_gate_done=done)
+
+
+def test_terminal_clarify_on_pinned_chat_reads_the_quest():
+    route, rs = _Route(), _rs()
+    assert route._answer_pinned_instead_of_clarify(rs) is True
+    assert rs.final == "answer" and rs.quest_id == "quest_pinned" and route.calls == 1
+
+
+def test_second_clarify_after_the_loop_gate_is_still_answered():
+    route, rs = _Route(), _rs(quest_id="quest_pinned", done=True)
+    assert route._answer_pinned_instead_of_clarify(rs) is True
+    assert route.calls == 0 and rs.final == "answer" and rs.plan.action == "answer"
+    assert any(g.get("locator") == "pinned_quest" for g in rs.gathered)
+
+
+def test_clarify_shaped_answer_on_pinned_chat_is_rewritten():
+    route, rs = _Route(), _rs(final="answer", quest_id="quest_pinned", done=True)
+    rs.plan.reply_shape = "clarify"
+    assert route._answer_pinned_instead_of_clarify(rs) is True
+    assert getattr(rs.plan, "reply_shape", None) != "clarify"
+
+
+def test_clarify_with_no_or_several_quests_is_left_alone():
+    for ids in ((), ("quest_a", "quest_b")):
+        route, rs = _Route(), _rs(quest_ids=ids)
+        assert route._answer_pinned_instead_of_clarify(rs) is False
+        assert rs.final == "clarify"

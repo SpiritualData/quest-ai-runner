@@ -90,6 +90,37 @@ class RunAnswerMixin:
         a pinned model id stays pinned)."""
         return rs.model
 
+    def _answer_pinned_instead_of_clarify(self, rs: SimpleNamespace) -> bool:
+        """On a person's turn in a chat pinned to one quest, turn a final clarify into an answer on that quest. True when it rewrote one.
+
+        The first time, ``answer_pinned_quest`` reads the quest's status snapshot (or names the quest for the writer). If that already ran this
+        turn and the planner still ended on a clarify, the turn is answered from what was gathered. A clarify on a chat with no quest, or with
+        several, is left alone: there the question is a real one."""
+        if not getattr(rs, "message_is_user_turn", False) or rs.plan is None:
+            return False
+        if not (rs.final == "clarify" or is_clarify(rs.plan)):
+            return False
+        ids = self._meta_quest_ids(rs._ctx_meta or {})
+        if not rs.quest_id and len(ids) == 1:
+            rs.quest_id = ids[0]
+        if not rs.quest_id or len([i for i in ids if str(i) != str(rs.quest_id)]) > 0:
+            return False
+        log.info("Pinned quest %s: final %s on a pinned chat rewritten to an answer (never ask which quest).", rs.quest_id, rs.final)
+        if not getattr(rs, "pinned_quest_gate_done", False) and self.tools is not None:
+            rs.pinned_quest_gate_done = True
+            try:
+                self.answer_pinned_quest(rs, rs._ctx_meta or {}, rs.emit)
+            except Exception:  # noqa: BLE001 -- a failed snapshot read never brings back the which-quest question
+                log.exception("Pinned quest %s: snapshot read failed; answering from what was gathered.", rs.quest_id)
+        if rs.plan.action == "clarify" or is_clarify(rs.plan):
+            rs.plan = PlanDecision(action="answer", user_intent="ask", needs_records=False,
+                                   rationale="A question on the quest this chat is pinned to: answered from what this turn gathered, never by asking which quest.")
+            if not any((g or {}).get("locator") == "pinned_quest" for g in rs.gathered if isinstance(g, dict)) and not getattr(rs, "status_snapshot", False):
+                rs.gathered.append({"kind": "query", "locator": "pinned_quest", "text": "This chat is about one quest, the one it is open on. Never ask which quest it is.",
+                                    "lead": "", "follow": "", "stems": [], "insight": "", "next_step": False, "records": []})
+        rs.final = rs.plan.action
+        return True
+
     def _run_route_action(self, rs: SimpleNamespace) -> Optional[OrchestratorResult]:
         """Route the loop's final action: gates, clarify, confirm, deep, and the first answer draft."""
         _ctx_meta = rs._ctx_meta
@@ -116,6 +147,13 @@ class RunAnswerMixin:
         # net would otherwise escalate "send the email" to a deep run after the email was sent.
         if rs.final == "tool" or (rs.final == "read" and rs.tool_calls_ran):
             rs.plan.action = rs.final = "answer"
+
+        # --- PINNED-QUEST TERMINAL GATE (the single choke point) ------------------------------
+        # A chat pinned to one quest is never answered by asking which quest. A clarify reaches the person two ways, both from the question alone:
+        # ``_run_clarify`` sends the planner's own question, and a clarify-shaped answer is written with no context (``_gen_answer`` below), so
+        # neither can see the pinned quest. The loop's gate rewrites the first clarify of a turn; a later replan could still end on one, so every
+        # terminal path is checked here.
+        self._answer_pinned_instead_of_clarify(rs)
 
         # --- BRAINSTORM TERMINAL GATE (the single choke point) --------------------------------
         # Whatever set the action -- the planner, the read-loop safety escalation, an overseer
