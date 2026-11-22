@@ -53,6 +53,13 @@ _BARE_GENERAL_KNOWLEDGE_LABEL = re.compile(
     re.IGNORECASE)
 
 
+def support_rewrite_shrank_deliverable(before: str, after: str) -> bool:
+    """True when a drafted deliverable (a bio, message, email) was shrunk below 60 percent of its length by the support
+    rewrite. The text was asked for, not claimed, so the draft stands; a rewrite that keeps most of it is a real edit."""
+    before, after = (before or "").strip(), (after or "").strip()
+    return bool(before) and len(after) < 0.6 * len(before)
+
+
 def support_rewrite_lost_answer(before: str, after: str) -> bool:
     """True when a support rewrite threw away the answer: the draft had numbers, the rewrite has
     none, is under 40 percent of its length, and is ONLY a general knowledge label ("General knowledge.").
@@ -743,7 +750,9 @@ class RunCloseMixin:
                         rs.text = self.keep_landed_work_reported(rs, _gen_answer(
                             SUPPORT_REWRITE_STEER.format(
                                 reason=verdict.get("reason") or "see the claims above", text=rs.text)))
-                        if support_rewrite_lost_answer(_before_support, rs.text):
+                        if getattr(rs, "draft_in_chat", False) and support_rewrite_shrank_deliverable(_before_support, rs.text):
+                            rs.text = _before_support
+                        elif support_rewrite_lost_answer(_before_support, rs.text):
                             rs.text = _before_support.rstrip() + "\n\n(General knowledge, not checked against your data.)"
                         _attempt += 1
                         continue

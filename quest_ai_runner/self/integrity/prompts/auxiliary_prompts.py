@@ -615,7 +615,8 @@ SUPPORT_REWRITE_STEER = (
     "figure, a definition) that answers what the person asked is kept with its number and marked "
     "as general knowledge, never removed or replaced by advice to check a manual; only a claim "
     "about the person's own data or about a fact you cannot stand behind is removed. Never invent a "
-    "source. Keep everything that is supported, keep the reply as short as "
+    "source. A text the person asked you to write (a bio, message, email, plan) is the deliverable, not a claim: keep it whole, "
+    "at the length and count they asked for, and change only a sentence that asserts something about their own data. Keep everything that is supported, keep the reply as short as "
     "before, and add no new claims. Do not use em dashes.\n\n"
     "--- YOUR PREVIOUS ANSWER ---\n{text}"
 )

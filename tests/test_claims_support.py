@@ -146,3 +146,12 @@ def test_support_rewrite_lost_answer_guard():
     long_draft = draft + " A metric cup is 250 ml, so 500 ml is two metric cups, slightly more than two US cups."
     assert support_rewrite_lost_answer(long_draft, "General knowledge, not checked against your data.")
     assert support_rewrite_lost_answer(long_draft, "This is general knowledge.")
+
+
+def test_support_rewrite_keeps_a_drafted_deliverable_whole():
+    from quest_ai_runner.self.integrity.prompts.auxiliary_prompts import SUPPORT_REWRITE_STEER
+    from quest_ai_runner.intelligence.mind.response_writer.orchestrator_run_close import support_rewrite_shrank_deliverable
+    assert "deliverable" in SUPPORT_REWRITE_STEER.format(reason="x", text="y")
+    bio = "Dana teaches gentle morning yoga. Her classes start slowly. Everyone is welcome to join her."
+    assert support_rewrite_shrank_deliverable(bio, "Dana teaches gentle morning yoga.")
+    assert not support_rewrite_shrank_deliverable(bio, bio.replace("Everyone is welcome to join her.", "All are welcome."))
