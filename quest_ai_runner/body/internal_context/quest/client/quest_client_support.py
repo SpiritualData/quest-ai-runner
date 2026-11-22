@@ -4,6 +4,7 @@ Split out of ``quest_client.py`` by definition; that module re-exports every nam
 """
 from __future__ import annotations
 
+import gzip
 import json
 import logging
 import os
@@ -133,6 +134,21 @@ class WriteResult:
 
     def __repr__(self) -> str:
         return f"WriteResult({self.status.value}, id={self.id!r}, detail={self.detail!r}, data={self.data!r})"
+
+
+def decode_gzip_body(raw: bytes, headers: Any) -> bytes:
+    """The body bytes with a gzip ``Content-Encoding`` undone, for a reply or an HTTP error body alike.
+    A body that is not actually gzip (a proxy's plain error page) is returned as sent."""
+    try:
+        encoding = str((headers.get("Content-Encoding", "") if headers is not None else "") or "").lower()
+    except AttributeError:
+        return raw
+    if raw and encoding == "gzip":
+        try:
+            return gzip.decompress(raw)
+        except (OSError, EOFError):
+            return raw
+    return raw
 
 
 def parse_retry_after(value: Any) -> Optional[float]:

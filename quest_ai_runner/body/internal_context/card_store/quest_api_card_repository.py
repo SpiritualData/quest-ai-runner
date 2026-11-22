@@ -37,7 +37,6 @@ the cache's stored listing. A cache is passed as ``cache=``. See ``CardCache``.
 """
 from __future__ import annotations
 
-import gzip
 import json
 import logging
 import os
@@ -51,6 +50,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from esoi import implementation
 from esoi import requirements
 from quest_ai_runner.body.internal_context.card_store.interface import CardCache
+from quest_ai_runner.body.internal_context.quest.client.quest_client_support import decode_gzip_body
 from hubofhubs.api import card_origin
 from quest_ai_runner.intelligence.subconscious.cards_from_files.card_shape_guard import refusal as card_shape_refusal
 
@@ -438,13 +438,12 @@ class QuestApiCardRepository:
         try:
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
                 raw = resp.read()
-                if str(resp.headers.get("Content-Encoding", "")).lower() == "gzip" and raw:
-                    raw = gzip.decompress(raw)
+                raw = decode_gzip_body(raw, resp.headers)
                 reply = json.loads(raw) if raw else None
         except urllib.error.HTTPError as exc:
             detail = ""
             try:
-                text = exc.read().decode("utf-8", errors="replace")
+                text = decode_gzip_body(exc.read(), exc.headers).decode("utf-8", errors="replace")
                 try:
                     parsed = json.loads(text)
                     detail = str(parsed.get("detail", text)) if isinstance(parsed, dict) else text

@@ -42,7 +42,7 @@ from quest_ai_runner.body.internal_context.quest.client.quest_client_connection 
 from quest_ai_runner.body.internal_context.quest.client import quest_client_read_cache as read_cache
 from quest_ai_runner.world.tools.tools_status import ToolStatus
 from quest_ai_runner.body.internal_context.quest.client.quest_client_support import (
-    QuestApiError, QuestNotConfigured, QuestWriteError, WriteResult, log, parse_retry_after)
+    QuestApiError, QuestNotConfigured, QuestWriteError, WriteResult, decode_gzip_body, log, parse_retry_after)
 
 QAR_QUEST_TIMEOUT_ENV_VAR = "QAR_QUEST_TIMEOUT_SECONDS"
 QAR_QUEST_READ_RETRIES_ENV_VAR = "QAR_QUEST_READ_RETRIES"
@@ -354,12 +354,7 @@ class TransportMixin:
                 return int(getattr(resp, "status", 200) or 200), payload
         except urllib.error.HTTPError as e:
             err_raw = e.read()
-            if err_raw and str((e.headers or {}).get("Content-Encoding", "") if e.headers is not None else "").lower() == "gzip":
-                import gzip
-                try:
-                    err_raw = gzip.decompress(err_raw)
-                except (OSError, EOFError):
-                    pass  # not actually gzip: keep the bytes as sent
+            err_raw = decode_gzip_body(err_raw, e.headers)
             detail = err_raw.decode(errors="replace")
             retry_after = parse_retry_after((e.headers or {}).get("Retry-After") if e.headers is not None else None)
             code = error_code_of(detail)
