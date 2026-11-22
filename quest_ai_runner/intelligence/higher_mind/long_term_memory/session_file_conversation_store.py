@@ -160,13 +160,18 @@ class SessionFileConversationStore(ConversationStore):
         if cached is not None and cached["mtime"] == mtime and cached["size"] == size:
             return cached
         entry: Dict[str, Any] = {"mtime": mtime, "size": size, "digest": "", "ts": mtime,
-                                 "valid": False}
+                                 "valid": False, "scope_conv": None}
         try:
             if size <= _DIGEST_FULL_PARSE_MAX_BYTES:
                 conv = self._load_conv(key)
                 if conv is not None:
                     entry["digest"] = conversation_digest(conv)
                     entry["ts"] = conversation_timestamp(conv) or mtime
+                    # The fields a scope filter reads, kept so the recency floor can check scope without loading the file.
+                    entry["scope_conv"] = {
+                        "user_id": conv.get("user_id"), "team_ids": conv.get("team_ids"),
+                        "participant_ids": conv.get("participant_ids"), "participants": conv.get("participants"),
+                        "timestamp": conversation_timestamp(conv)}
                     entry["valid"] = True
             else:
                 with open(path, "rb") as f:
@@ -341,16 +346,17 @@ class SessionFileConversationStore(ConversationStore):
             # The floor counts only conversations IN SCOPE: another person's recent conversations
             # would otherwise take the floor slots, be dropped at the scope filter below, and leave
             # this person's own recent history out. The scan is bounded by _MAX_FULL_LOADS loads.
+            # Scope is read from the cached digest, so the scan loads no file; an oversized file (digest
+            # from raw head and tail only) carries no scope fields and, as for any file lacking them, is not filtered here.
             floor_keys = []
-            for k in by_recency[:_MAX_FULL_LOADS]:
+            for k in by_recency:
                 if len(floor_keys) >= _RECENCY_FLOOR_CONVS:
                     break
-                if self._scope_matches(self._load_conv(k), scope):
+                if self._entry_in_scope(candidates[k], scope):
                     floor_keys.append(k)
-            for k in floor_keys:
-                if k not in shortlist:
-                    shortlist.append(k)
-            shortlist = shortlist[:_MAX_FULL_LOADS]
+            # Reserve the floor's slots: the relevance list is cut to what is left of the load cap, so the floor is never cut off.
+            shortlist = [k for k in shortlist if k not in floor_keys][:max(0, _MAX_FULL_LOADS - len(floor_keys))]
+            shortlist.extend(floor_keys)
 
             # STAGE 2: fully load ONLY the shortlist, scope-filter, and hand to select_related
             # (which re-ranks precisely and renders under max_chars). The original store key is
@@ -382,6 +388,21 @@ class SessionFileConversationStore(ConversationStore):
             return ConversationContext(scanned=0)
 
     # --- helpers --------------------------------------------------------------
+
+    @classmethod
+    def _entry_in_scope(cls, entry: Dict[str, Any], scope: Dict[str, Any]) -> bool:
+        """Scope check from a cached digest entry (no file load). Same rules as ``_scope_matches``."""
+        fields = entry.get("scope_conv")
+        if not isinstance(fields, dict):
+            return True
+        conv = {k: v for k, v in fields.items() if k != "timestamp"}
+        if not cls._scope_matches(conv, {k: v for k, v in (scope or {}).items() if k != "since"}):
+            return False
+        since = (scope or {}).get("since")
+        ts = fields.get("timestamp")
+        if isinstance(since, (int, float)) and ts and ts < float(since):
+            return False
+        return True
 
     @staticmethod
     def _scope_matches(conv: Any, scope: Dict[str, Any]) -> bool:

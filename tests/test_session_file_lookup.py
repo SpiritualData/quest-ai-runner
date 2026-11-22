@@ -1,4 +1,5 @@
 """The live deep-run monitor must find the worker's session file under any Claude config base."""
+from typing import List
 from pathlib import Path
 
 from hubofhubs.api import session as hub_session
@@ -130,3 +131,37 @@ def test_recency_floor_counts_only_conversations_in_scope(tmp_path):
     ids = {str(s.get("conv_id", "")) for s in ctx.sources}
     assert any(i.endswith("a3.json") or i.endswith("a3") for i in ids), ids
     assert not any("b" in i.split("/")[-1][:1] for i in ids), ids
+
+
+def _floor_store(tmp_path, convs):
+    import json
+    from quest_ai_runner.intelligence.higher_mind.long_term_memory.session_file_conversation_store import SessionFileConversationStore
+    for cid, user, ts, text in convs:
+        (tmp_path / f"{cid}.json").write_text(json.dumps({
+            "id": cid, "user_id": user, "updated_at": ts,
+            "messages": [{"role": "user", "text": text}]}), encoding="utf-8")
+    return SessionFileConversationStore(sessions_dir=str(tmp_path))
+
+
+def test_recency_floor_is_not_cut_off_by_a_full_relevance_shortlist(tmp_path):
+    """A deep context pass (max_convs 8) fills all 16 load slots by relevance; the floor still gets its slots."""
+    convs = [(f"m{i:02d}", "alice", 100 + i, "alphaword discussion") for i in range(20)]
+    convs += [("recent1", "alice", 900, "unrelated chat one"), ("recent2", "alice", 901, "unrelated chat two")]
+    store = _floor_store(tmp_path, convs)
+    ctx = store.related_slices("alphaword", {"user_id": "alice"}, max_convs=8)
+    ids = {str(s.get("conv_id", "")) for s in ctx.sources}
+    assert any("recent1" in i for i in ids) and any("recent2" in i for i in ids), ids
+
+
+def test_recency_floor_scope_check_loads_no_extra_files(tmp_path):
+    """The floor reads scope from the cached digest: it never fully loads the other person's recent files."""
+    convs = [(f"b{i:02d}", "bob", 500 + i, "bob chat") for i in range(12)]
+    convs += [("a1", "alice", 100, "alice chat"), ("a2", "alice", 101, "alice chat")]
+    store = _floor_store(tmp_path, convs)
+    store.related_slices("nothing matches", {"user_id": "alice"})      # warms every digest
+    loaded: List[str] = []
+    original = store._load_conv
+    store._load_conv = lambda key: (loaded.append(key), original(key))[1]       # type: ignore[method-assign]
+    ctx = store.related_slices("nothing matches", {"user_id": "alice"})
+    assert len(loaded) <= 2 and not any("b0" in k or "b1" in k for k in loaded), loaded
+    assert {str(src.get("conv_id", "")) for src in ctx.sources}, ctx.sources
