@@ -621,6 +621,18 @@ SUPPORT_REWRITE_STEER = (
     "--- YOUR PREVIOUS ANSWER ---\n{text}"
 )
 
+# The second try when a support rewrite of a drafted deliverable came back far shorter than the draft. The flagged claims
+# stay out or marked: the draft is never restored over them.
+SUPPORT_REWRITE_KEEP_WHOLE_STEER = (
+    "Your previous rewrite cut the requested text far shorter than the original. Write it again at close to the original "
+    "length and structure: keep the requested text whole and change only the flagged claims: {reason}\n"
+    "For each flagged claim, remove it or mark it plainly as unconfirmed (for example a placeholder the person fills in, "
+    "or a note that you have no evidence for it); never keep it as a stated fact and never invent a replacement. "
+    "Keep every sentence that is not flagged, and add no new claims. Do not use em dashes.\n\n"
+    "--- THE ORIGINAL TEXT ---\n{original}\n\n"
+    "--- YOUR SHORTER REWRITE (do not copy its length) ---\n{rewrite}"
+)
+
 # The exact delimiter line the deep worker must emit before its future-context bullets, and the
 # prefix the parser slices on. Kept as one constant so the brief instruction and the parser agree.
 FUTURE_CONTEXT_DELIMITER = "=== FUTURE CONTEXT (for similar requests by this user) ==="

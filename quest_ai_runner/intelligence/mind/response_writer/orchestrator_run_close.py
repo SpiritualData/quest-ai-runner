@@ -15,7 +15,7 @@ from quest_ai_runner.intelligence.critical_thinking.names_deep import names_deep
 from quest_ai_runner.intelligence.critical_thinking.critical_data_pass import check as critical_check
 from hubofhubs.api import reason_unread as critical_reason, unread as critical_unread
 
-from quest_ai_runner.self.integrity.prompts.auxiliary_prompts import SUPPORT_REWRITE_STEER
+from quest_ai_runner.self.integrity.prompts.auxiliary_prompts import SUPPORT_REWRITE_KEEP_WHOLE_STEER, SUPPORT_REWRITE_STEER
 from hubofhubs.api import EVENT_INTENT, EVENT_MILESTONE, Mode
 from hubofhubs.api import ProgressEvent
 from quest_ai_runner.body.internal_context.adapters_values import PlanDecision
@@ -751,7 +751,15 @@ class RunCloseMixin:
                             SUPPORT_REWRITE_STEER.format(
                                 reason=verdict.get("reason") or "see the claims above", text=rs.text)))
                         if getattr(rs, "draft_in_chat", False) and support_rewrite_shrank_deliverable(_before_support, rs.text):
-                            rs.text = _before_support
+                            # Never restore the draft: it still holds the claims the check flagged. Retry once asking for the whole
+                            # text with only those claims removed or marked; if that is still short, the shorter supported rewrite stands.
+                            log.info("Support rewrite shrank a drafted deliverable (%d to %d chars); retrying once to keep it whole.",
+                                     len(_before_support.strip()), len((rs.text or "").strip()))
+                            _short = rs.text
+                            rs.text = self.keep_landed_work_reported(rs, _gen_answer(SUPPORT_REWRITE_KEEP_WHOLE_STEER.format(
+                                reason=verdict.get("reason") or "see the claims above", original=_before_support, rewrite=_short)))
+                            if support_rewrite_shrank_deliverable(_before_support, rs.text):
+                                log.info("Support rewrite is still short after the retry; keeping the shorter supported rewrite.")
                         elif support_rewrite_lost_answer(_before_support, rs.text):
                             rs.text = _before_support.rstrip() + "\n\n(General knowledge, not checked against your data.)"
                         _attempt += 1

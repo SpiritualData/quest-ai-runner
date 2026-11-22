@@ -155,3 +155,51 @@ def test_support_rewrite_keeps_a_drafted_deliverable_whole():
     bio = "Dana teaches gentle morning yoga. Her classes start slowly. Everyone is welcome to join her."
     assert support_rewrite_shrank_deliverable(bio, "Dana teaches gentle morning yoga.")
     assert not support_rewrite_shrank_deliverable(bio, bio.replace("Everyone is welcome to join her.", "All are welcome."))
+
+
+BIO = ("Dana teaches gentle morning yoga and has a PhD from Oxford. Her classes start slowly and build over an hour. "
+       "Everyone is welcome to join her, and no experience is needed.")
+BIO_SHORT = "Dana teaches gentle morning yoga."
+BIO_FIXED = ("Dana teaches gentle morning yoga. Her classes start slowly and build over an hour. "
+             "Everyone is welcome to join her, and no experience is needed.")
+
+
+class DraftProvider(SupportProvider):
+    """A drafted bio, a support rewrite that shrinks it, and a keep-whole retry (never restores the flagged claim)."""
+
+    def __init__(self, retry_text: str, **kw):
+        super().__init__(**kw)
+        self.retry_text = retry_text
+        self.keep_whole_retries = 0
+
+    def answer(self, messages, *, model, system=None) -> str:
+        joined = "\n".join(m["content"] if isinstance(m["content"], str) else "" for m in messages)
+        if "cut the requested text far shorter" in joined:
+            self.keep_whole_retries += 1
+            return self.retry_text
+        if "claims that nothing from this turn supports" in joined:
+            self.support_rewrites += 1
+            return BIO_SHORT
+        return super().answer(messages, model=model, system=system)
+
+
+def _run_bio(retry_text):
+    provider = DraftProvider(
+        retry_text,
+        plan_decisions=[{"action": "answer", "rationale": "write the bio", "deep_target": "draft_in_chat"}],
+        goal_verdicts=[{"met": False, "claims_unsupported": True, "reason": "invents a PhD from Oxford"}] * 3,
+        answer_text=BIO)
+    res, _ = run(provider, message="write me a short bio for Dana")
+    return provider, res
+
+
+def test_shrunk_drafted_deliverable_is_retried_whole_without_the_flagged_claim():
+    provider, res = _run_bio(BIO_FIXED)
+    assert provider.support_rewrites == 1 and provider.keep_whole_retries == 1
+    assert res.text == BIO_FIXED and "PhD" not in res.text
+
+
+def test_shrunk_drafted_deliverable_still_short_after_retry_never_restores_the_claim():
+    provider, res = _run_bio(BIO_SHORT)
+    assert provider.keep_whole_retries == 1        # one retry only
+    assert res.text == BIO_SHORT and "PhD" not in res.text
