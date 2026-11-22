@@ -1107,6 +1107,13 @@ class RunLoopMixin:
             log.info("planner decision step %d: action=%s user_intent=%s deep_target=%s reply_shape=%s asks_first=%s tools=%s rationale=%r", step, rs.plan.action,
                      rs.plan.user_intent, getattr(rs.plan, "deep_target", None), getattr(rs.plan, "reply_shape", None), getattr(rs.plan, "asks_first", None),
                      [str((c or {}).get("name")) for c in (rs.plan.tool_calls or [])], str(rs.plan.rationale or "")[:200])
+            # --- PINNED-QUEST GATE: a chat pinned to one quest never gets a which-quest question ------------------------------------------
+            # The quest is already known, so a clarify (a question asked back, "which quest do you mean?") is wrong here. The clarify is rewritten
+            # to an answer on that quest (``answer_pinned_quest``). Once per turn.
+            if (rs.plan and message_is_user_turn and rs.quest_id and self.tools is not None and not getattr(rs, "pinned_quest_gate_done", False)
+                    and (rs.plan.action == "clarify" or (rs.plan.action == "answer" and getattr(rs.plan, "reply_shape", None) == "clarify"))):
+                rs.pinned_quest_gate_done = True
+                self.answer_pinned_quest(rs, rs._ctx_meta, emit)
             emit.emit(ProgressEvent(type=(EVENT_PLAN if step == 0 else EVENT_REPLAN),
                                     action=rs.plan.action, step=rs.steps,
                                     text=(None if narrator.enabled else (rs.plan.rationale or None))))

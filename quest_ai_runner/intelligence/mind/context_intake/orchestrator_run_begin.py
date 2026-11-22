@@ -520,6 +520,51 @@ class RunBeginMixin:
                                                structure_move="focus" if rs.status_next_step else "review",      # the snapshot is the one home of these turns; the quest's structure feeds it
                                                rationale="A status question: answered from the status snapshot read for this turn.")
 
+    def answer_pinned_quest(self, rs: SimpleNamespace, ctx_meta: Dict[str, Any], emit: Any) -> None:
+        """A chat pinned to one quest is never answered with "which quest do you mean?". The planner can still choose a clarify reply for such a turn (it
+        was measured on the dev stack 2026-11-22: "Which quest do you mean? I do not see one in our current conversation." on the dashboard's "How is this
+        quest going?", 5 of 8 tries). That reply is written from the question alone, so it never reads the pinned quest. The clarify is rewritten here:
+        the reply is written from that quest's status snapshot (read by code), and when no snapshot can be read it is answered with the quest's own
+        context read by the planner. Nothing is asked of the person."""
+        from quest_ai_runner.intelligence.critical_thinking.esoi_application import status_snapshot
+        quest_id = str(rs.quest_id)
+        quests = status_snapshot.reachable_quests(self.tools)
+        row = next((q for q in quests if str(q.get("quest_id")) == quest_id), {})
+        own = (rs.retrieval_constraints or {}).get("actor") == "me"
+        kind = status_snapshot.ask_kind(rs.user_message, self.cheap_decision, False)
+        emit.status("Reading where the quest stands…")
+        snapshot = status_snapshot.build(self.tools, quest_id, str(ctx_meta.get("asker_user_id") or ctx_meta.get("user_id") or ""), own=own,
+                                         question=rs.user_message, decide=self.cheap_decision, quest_title=str(row.get("title") or ""),
+                                         quest_name=str(row.get("name") or ""), quest_outcome=str(row.get("outcome") or ""),
+                                         next_step=kind == "next", started=str(row.get("started") or ""), list_goals=kind == "list")
+        if snapshot is not None and rs.trace is not None:
+            rs.trace.records_read(snapshot.get("records"))
+        log.info("Pinned quest %s: planner clarify rewritten to an answer; snapshot %s", quest_id, "read" if snapshot is not None else "not read")
+        if snapshot is not None:
+            rs.gathered.append(snapshot)
+            rs.status_snapshot = True
+            rs.status_lead = str(snapshot.get("lead") or "")
+            rs.status_follow = str(snapshot.get("follow") or "")
+            rs.status_stems = list(snapshot.get("stems") or [])
+            rs.status_insight = str(snapshot.get("insight") or "")
+            rs.status_next_step = bool(snapshot.get("next_step"))
+            rs.plan = PlanDecision(action="answer", user_intent="ask", needs_records=False,
+                                   structure_move="focus" if rs.status_next_step else "review",
+                                   rationale="A question on the quest this chat is pinned to: answered from the quest's status snapshot read for this turn.")
+            return
+        # No snapshot could be read: the reply still names the pinned quest. Without its name in what the writer is given, the writer had nothing
+        # to say which quest the chat is about and asked which quest (measured on the dev stack 2026-11-22, 1 of 3 runs of check_answer_panel_mobile.py).
+        name = " ".join(str(row.get("name") or row.get("title") or "").split())
+        outcome = " ".join(str(row.get("outcome") or "").split())
+        if name:
+            identity = f'This chat is about the quest "{name}"' + (f" (outcome: {outcome})" if outcome else "") + ". Call it by this name. Never ask which quest it is."
+        else:
+            identity = "This chat is about one quest, named in the chat. Never ask which quest it is; say what could not be read this time."
+        rs.gathered.append({"kind": "query", "locator": "pinned_quest", "text": identity, "lead": "", "follow": "", "stems": [], "insight": "",
+                            "next_step": False, "records": []})
+        rs.plan = PlanDecision(action="answer", user_intent="ask", needs_records=True,
+                               rationale="A question on the quest this chat is pinned to: answered from the quest's own records, which the planner reads.")
+
     def _caller_deep_goal(self, goal: str, now: Optional[str], emit: Any) -> str:
         """The goal a caller-chosen deep run is checked against: ``goal`` itself when it is short, else a done-standard
         condensed from it by the one cheap goal-condition call a chat turn makes (``_derive_goal_condition``).
@@ -670,6 +715,12 @@ class RunBeginMixin:
                     rs.user_message, conv_id, conv_scope or {}, emit)
             except Exception:  # noqa: BLE001 — understanding must never break the run
                 rs.goal_condition, conv_ctx_text, clarify_q = rs.user_message, "", None
+            # A chat pinned to one quest never stops for "which quest do you mean?": the understanding step does not see the pinned quest, so it
+            # asked that on "How is this quest going?" (dev stack 2026-11-22, the turns that replied "Which quest do you mean?" never reached the planner).
+            import re as _re
+            if clarify_q and (rs.quest_id or self._meta_quest_ids(_ctx_meta)) and _re.search(r"\b(which|what)\b[^?.]*\bquest\b", str(clarify_q), _re.I):
+                log.info("Pinned quest: understanding asked which quest; the question is dropped and the turn runs on the pinned quest.")
+                clarify_q = None
             if clarify_q and rs.brainstorm_active:
                 # BRAINSTORM: a latched turn escalates NOTHING, so this may not park a decision-
                 # request. Carry the question into the reply instead (the answer asks it inline) and
