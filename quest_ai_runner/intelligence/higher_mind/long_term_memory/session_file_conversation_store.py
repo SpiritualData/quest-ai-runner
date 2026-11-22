@@ -338,7 +338,15 @@ class SessionFileConversationStore(ConversationStore):
             # its words overlap nothing.
             by_recency = sorted(candidates, key=lambda k: float(candidates[k]["ts"] or 0.0),
                                 reverse=True)
-            floor_keys = by_recency[:_RECENCY_FLOOR_CONVS]
+            # The floor counts only conversations IN SCOPE: another person's recent conversations
+            # would otherwise take the floor slots, be dropped at the scope filter below, and leave
+            # this person's own recent history out. The scan is bounded by _MAX_FULL_LOADS loads.
+            floor_keys = []
+            for k in by_recency[:_MAX_FULL_LOADS]:
+                if len(floor_keys) >= _RECENCY_FLOOR_CONVS:
+                    break
+                if self._scope_matches(self._load_conv(k), scope):
+                    floor_keys.append(k)
             for k in floor_keys:
                 if k not in shortlist:
                     shortlist.append(k)

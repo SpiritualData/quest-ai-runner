@@ -113,3 +113,20 @@ def test_a_resumed_session_does_not_replay_what_the_person_already_saw(tmp_path,
     write("resumed worker: recorded the metric")
     seen = watch(already)
     assert len(seen) == 1 and "resumed worker" in seen[0]
+
+
+def test_recency_floor_counts_only_conversations_in_scope(tmp_path):
+    """Another person's recent conversations must not take the recency floor slots of this person."""
+    import json
+    from quest_ai_runner.intelligence.higher_mind.long_term_memory.session_file_conversation_store import SessionFileConversationStore
+    convs = [("a1", "alice", 100), ("a2", "alice", 200), ("a3", "alice", 300),
+             ("b1", "bob", 400), ("b2", "bob", 500), ("b3", "bob", 600)]
+    for cid, user, ts in convs:
+        (tmp_path / f"{cid}.json").write_text(json.dumps({
+            "id": cid, "user_id": user, "updated_at": ts,
+            "messages": [{"role": "user", "text": f"topic {cid} zzz"}]}), encoding="utf-8")
+    store = SessionFileConversationStore(sessions_dir=str(tmp_path))
+    ctx = store.related_slices("nothing matches this query", {"user_id": "alice"}, max_convs=3)
+    ids = {str(s.get("conv_id", "")) for s in ctx.sources}
+    assert any(i.endswith("a3.json") or i.endswith("a3") for i in ids), ids
+    assert not any("b" in i.split("/")[-1][:1] for i in ids), ids
