@@ -305,3 +305,14 @@ def test_update_habit_sends_assignees_only_when_given():
     assert captured["body"] == {"assigned_to_user_ids": ["user_a", "user_b"]}
     client.update_habit("habit_1", assigned_to_user_ids=[])
     assert captured["body"] == {"assigned_to_user_ids": []}
+
+
+def test_update_habit_sends_day_times_only_when_given():
+    client, captured = client_capturing_call()
+    sleep = {"Tue": ["05:00"], "Sat": ["06:30"], "Mon": ["07:30"]}
+    client.update_habit("habit_1", day_times=sleep)
+    assert captured["body"] == {"day_times": sleep}
+    client.update_habit("habit_1", name="Walk")
+    assert captured["body"] == {"name": "Walk"}              # left out: the map is not touched
+    client.update_habit("habit_1", day_times={})
+    assert captured["body"] == {"day_times": {}}             # empty clears it
