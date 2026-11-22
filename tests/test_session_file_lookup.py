@@ -165,3 +165,15 @@ def test_recency_floor_scope_check_loads_no_extra_files(tmp_path):
     ctx = store.related_slices("nothing matches", {"user_id": "alice"})
     assert len(loaded) <= 2 and not any("b0" in k or "b1" in k for k in loaded), loaded
     assert {str(src.get("conv_id", "")) for src in ctx.sources}, ctx.sources
+
+
+def test_recency_floor_checks_scope_of_an_oversized_file_in_full(tmp_path, monkeypatch):
+    """A file too large to digest in full has no cached scope: it is loaded and checked, so another person's
+    large recent conversation never takes this person's floor slot."""
+    from quest_ai_runner.intelligence.higher_mind.long_term_memory import session_file_conversation_store as mod
+    monkeypatch.setattr(mod, "_DIGEST_FULL_PARSE_MAX_BYTES", 10)        # every file counts as oversized
+    convs = [("b1", "bob", 600, "bob chat"), ("b2", "bob", 601, "bob chat"), ("a1", "alice", 100, "alice chat")]
+    store = _floor_store(tmp_path, convs)
+    ctx = store.related_slices("nothing matches", {"user_id": "alice"}, max_convs=3)
+    ids = {str(s.get("conv_id", "")) for s in ctx.sources}
+    assert any("a1" in i for i in ids) and not any("b1" in i or "b2" in i for i in ids), ids

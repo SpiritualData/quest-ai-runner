@@ -55,7 +55,8 @@ _BARE_GENERAL_KNOWLEDGE_LABEL = re.compile(
 
 def support_rewrite_shrank_deliverable(before: str, after: str) -> bool:
     """True when a drafted deliverable (a bio, message, email) was shrunk below 60 percent of its length by the support
-    rewrite. The text was asked for, not claimed, so the draft stands; a rewrite that keeps most of it is a real edit."""
+    rewrite. The text was asked for, so the caller retries the rewrite once to keep it whole (it never restores the
+    flagged draft); a rewrite that keeps most of it is a real edit."""
     before, after = (before or "").strip(), (after or "").strip()
     return bool(before) and len(after) < 0.6 * len(before)
 
@@ -758,6 +759,8 @@ class RunCloseMixin:
                             _short = rs.text
                             rs.text = self.keep_landed_work_reported(rs, _gen_answer(SUPPORT_REWRITE_KEEP_WHOLE_STEER.format(
                                 reason=verdict.get("reason") or "see the claims above", original=_before_support, rewrite=_short)))
+                            if not (rs.text or "").strip() or len(rs.text.strip()) < len((_short or "").strip()):
+                                rs.text = _short    # an empty or even shorter retry never replaces the first rewrite
                             if support_rewrite_shrank_deliverable(_before_support, rs.text):
                                 log.info("Support rewrite is still short after the retry; keeping the shorter supported rewrite.")
                         elif support_rewrite_lost_answer(_before_support, rs.text):

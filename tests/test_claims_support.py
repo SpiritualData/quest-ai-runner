@@ -203,3 +203,9 @@ def test_shrunk_drafted_deliverable_still_short_after_retry_never_restores_the_c
     provider, res = _run_bio(BIO_SHORT)
     assert provider.keep_whole_retries == 1        # one retry only
     assert res.text == BIO_SHORT and "PhD" not in res.text
+
+
+def test_an_empty_keep_whole_retry_never_replaces_the_first_rewrite():
+    provider, res = _run_bio("")
+    assert provider.keep_whole_retries == 1
+    assert res.text == BIO_SHORT and "PhD" not in res.text

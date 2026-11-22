@@ -346,13 +346,19 @@ class SessionFileConversationStore(ConversationStore):
             # The floor counts only conversations IN SCOPE: another person's recent conversations
             # would otherwise take the floor slots, be dropped at the scope filter below, and leave
             # this person's own recent history out. The scan is bounded by _MAX_FULL_LOADS loads.
-            # Scope is read from the cached digest, so the scan loads no file; an oversized file (digest
-            # from raw head and tail only) carries no scope fields and, as for any file lacking them, is not filtered here.
+            # Scope is read from the cached digest, so the scan loads no file. An oversized file (digest from raw
+            # head and tail only) carries no cached scope fields, so it alone is loaded and checked in full, as on main:
+            # another person's large recent conversation must not take a floor slot.
             floor_keys = []
             for k in by_recency:
                 if len(floor_keys) >= _RECENCY_FLOOR_CONVS:
                     break
-                if self._entry_in_scope(candidates[k], scope):
+                if isinstance(candidates[k].get("scope_conv"), dict):
+                    in_scope = self._entry_in_scope(candidates[k], scope)
+                else:
+                    loaded = self._load_conv(k)
+                    in_scope = loaded is not None and self._scope_matches(loaded, scope)
+                if in_scope:
                     floor_keys.append(k)
             # Reserve the floor's slots: the relevance list is cut to what is left of the load cap, so the floor is never cut off.
             shortlist = [k for k in shortlist if k not in floor_keys][:max(0, _MAX_FULL_LOADS - len(floor_keys))]
