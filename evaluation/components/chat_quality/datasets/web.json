@@ -298,5 +298,35 @@
    "The reply does not answer with only advice to check the oven manual, and it marks the figures as general knowledge once, in a few words"
   ],
   "evidence_notes": "Failed in the real app on 20 Nov (375 F) and 21 Nov (400 F): numbers dropped by the support rewrite, fix in 96985415."
+ },
+ {
+  "id": "WEB-020",
+  "dataset": "explicit",
+  "area": "another language: German etiquette ask, reply language",
+  "quest_key": "family",
+  "message": "Wie sage ich höflich eine Einladung zu einer Party ab, und wie schlage ich einen neuen Termin vor?",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply is written in German, the language of the question, with no English explanation sentences",
+   "It gives a polite way to decline and a separate way to propose another date",
+   "It offers one short ready-to-send example message"
+  ],
+  "evidence_notes": "Failed in the real app on 22 Nov: the explanation was English with German quotes. Kind: another language, user: new."
+ },
+ {
+  "id": "WEB-021",
+  "dataset": "explicit",
+  "area": "general knowledge: unit conversion with a consistent estimate",
+  "quest_key": "family",
+  "message": "how many km is 2.5 miles and about how long does that take to walk",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply gives about 4 km for 2.5 miles",
+   "The walking time is consistent with the pace the reply states (a pace of 15 to 20 minutes per mile gives about 38 to 50 minutes, not 50 to 60)",
+   "The reply marks the figures as general knowledge at most once"
+  ],
+  "evidence_notes": "Real app, 22 Nov: distance right, but the stated pace and the stated time disagreed. Minor flaw."
  }
 ]
