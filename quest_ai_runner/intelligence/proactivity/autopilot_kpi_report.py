@@ -101,7 +101,7 @@ def with_readable_kpis(text: str, output: str) -> str:
     return (stripped + "\n\n**KPIs this run**\n" + "\n".join(lines)).strip()
 
 
-def _keep_valid(items: List[Dict[str, Any]], is_valid: Callable[[Dict[str, Any]], bool], problem: str) -> List[Dict[str, Any]]:
+def keep_valid(items: List[Dict[str, Any]], is_valid: Callable[[Dict[str, Any]], bool], problem: str) -> List[Dict[str, Any]]:
     """The items that pass ``is_valid``; logs one warning naming ``problem`` when any were left out."""
     kept = [i for i in items if is_valid(i)]
     if len(kept) != len(items):
@@ -119,11 +119,11 @@ def report_run(client: Any, quest_id: str, autopilot_id: str, run_task_id: str, 
     # Quest requires a name, a kind and a definition on each new KPI and refuses the WHOLE report (values included) when one lacks them,
     # so an incomplete definition is left out here and the values still land.
     where = f"autopilot {autopilot_id} run {run_task_id}"
-    new = _keep_valid(new, lambda n: bool(n.get("name") and str(n.get("kind") or "").strip().lower() in ("count", "percent") and n.get("definition")),
+    new = keep_valid(new, lambda n: bool(n.get("name") and str(n.get("kind") or "").strip().lower() in ("count", "percent") and n.get("definition")),
                       f"{where} defined a KPI without a name, kind or definition")
     reported = [i for i in data["values"] if isinstance(i, dict)]
     values = [{k: v for k, v in item.items() if k in ("kpi_id", "name", "value", "blocker")}
-              for item in _keep_valid(reported, lambda i: isinstance(i.get("value"), (int, float)) and not isinstance(i.get("value"), bool),
+              for item in keep_valid(reported, lambda i: isinstance(i.get("value"), (int, float)) and not isinstance(i.get("value"), bool),
                                       f"{where} reported a KPI without a number")]
     try:
         result = client.post_autopilot_kpi_report(quest_id, autopilot_id, run_task_id, values, new or None)
