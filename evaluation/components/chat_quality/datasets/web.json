@@ -328,5 +328,20 @@
    "The reply marks the figures as general knowledge at most once"
   ],
   "evidence_notes": "Real app, 22 Nov: distance right, but the stated pace and the stated time disagreed. Minor flaw."
+ },
+ {
+  "id": "WEB-022",
+  "dataset": "explicit",
+  "area": "general knowledge: single temperature conversion with a personal purpose",
+  "quest_key": "family",
+  "message": "what is 85 degrees Fahrenheit in Celsius, I want to set my bath",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply gives about 29 to 30 degrees Celsius for 85 F",
+   "The Celsius figure comes first and is not replaced by a remark about how the temperature feels",
+   "The reply marks the figure as general knowledge at most once"
+  ],
+  "evidence_notes": "Real app, 22 Nov: the reply said only that it was a cool temperature for a bath, with no Celsius figure. Kind: web lookup or general knowledge, user: new."
  }
 ]
