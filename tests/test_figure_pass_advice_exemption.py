@@ -23,3 +23,12 @@ def test_the_figure_cut_still_removes_an_unsupported_claim_about_the_person():
     text = "Try 10 minutes a day. You logged 12 sessions last month."
     cut, dropped = strip_unsupported(text, "walks of 10 minutes; run log: 3 sessions")
     assert dropped == ["12"] and "12 sessions" not in cut and "10 minutes" in cut
+
+
+def test_a_general_knowledge_reach_verdict_keeps_a_conversion_figure_but_records_still_check():
+    assert figures_exempt(turn(shape="default"), {"reach": "general"}) is True
+    assert figures_exempt(turn(shape="default"), {"reach": "own_records"}) is False
+    assert figures_exempt(turn(shape="default", gathered=[{"text": "Run log: 3 sessions"}]), {"reach": "general"}) is False
+    # a quest's records sitting in the context do not make a general question's figures unsafe
+    assert figures_exempt(turn(shape="default", sources=[{"adapter": "records", "items": ["quest-note:q1:0"]}]), {"reach": "general"}) is True
+    assert figures_exempt(turn(shape="default", sources=[{"adapter": "records", "items": ["quest-note:q1:0"]}]), {"reach": "own_records"}) is False

@@ -57,12 +57,20 @@ from quest_ai_runner.world.tools.tools import ToolContext
 EMPTY_READ_STEPS_BEFORE_NOTE = 2
 
 
-def figures_exempt(rs) -> bool:
+def figures_exempt(rs, reach=None) -> bool:
     """True when the figure pass is skipped for this reply: the planner took it for general ADVICE and the turn read none of the person's records (Joshua, 2026-11-11,
     "exempt general answers"). A reply that had records in front of it can state a figure about them, so it stays checked even when the planner called it advice."""
-    return bool(rs.plan is not None
-                and standard_for(rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery).shape == SHAPE_ADVICE
-                and not turn_holds_records(getattr(rs, "_sources", None), getattr(rs, "gathered", None)))
+    if rs.plan is None:
+        return False
+    # The reach judge took the question for general knowledge and the planner read nothing this turn: a conversion or a standard fact
+    # ("85 F is 29.4 C") is arithmetic, not a reading of the person's data, so the figure pass keeps it. The quest's records sitting in the
+    # assembled context do not count here (the question needed none); a turn that read anything (gathered text) stays checked. The pass
+    # cut these figures and left "This is general knowledge." (live 20 to 23 Nov: 350 F, 500 ml, 85 F, 2.5 miles, 375 F).
+    if str((reach or {}).get("reach") or "").lower() == "general" and not getattr(rs, "gathered", None):
+        return True
+    if turn_holds_records(getattr(rs, "_sources", None), getattr(rs, "gathered", None)):
+        return False
+    return standard_for(rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery).shape == SHAPE_ADVICE
 
 
 class RunLoopMixin:
@@ -220,7 +228,7 @@ class RunLoopMixin:
                 # (the first 5,000 characters of the context, 2,500 of each read) made true figures read as unsupported and took whole sentences out.
                 # Not held to an ADVICE reply (a general how-to answer): its amounts and times ("ten minutes a day") are suggestions, not readings
                 # of the person's records, and cutting them took the sentence (and the list item) out of the very answer the person asked for.
-                advice_reply = figures_exempt(rs)
+                advice_reply = figures_exempt(rs, self.reach_verdict(rs.user_message))
                 dropped = []
                 if not advice_reply:
                     res.text, dropped = without_unsupported(rs, res.text, figure_evidence(rs))
