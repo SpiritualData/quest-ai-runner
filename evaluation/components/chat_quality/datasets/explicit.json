@@ -2661,6 +2661,21 @@
       ],
       "forbid_writes": true,
       "evidence_notes": "Kind: plan or draft. User: mentor. No case was written from a mentor's point of view; mentors are a launch audience. Grounding beats generic coaching questions."
+    },
+    {
+      "id": "EXP-096",
+      "dataset": "explicit",
+      "area": "about Quest itself: goal reminder, misspelled",
+      "quest_key": "language",
+      "message": "how do i set a remindr for my sourdogh goal in quest",
+      "expected_routing": "inline",
+      "forbid_writes": true,
+      "rubric": [
+        "Says where reminders for a goal are set, using a button or section name from the Quest user guide (Scheduled Reminders or Notification Channels under the account page), not an invented label",
+        "Does not describe the goal as a habit, and says plainly if a goal reminder works differently from a habit reminder",
+        "Does not claim a reminder was set, and does not ask the person which quest they mean"
+      ],
+      "evidence_notes": "Real app, 23 Nov: the reply described a habit reminder with no button names and treated the goal as a habit. Kind: about Quest itself, vague or misspelled. User: new. Same guide-search class as the 20 Nov two-part reminder miss."
     }
   ]
 }
