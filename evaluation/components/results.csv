@@ -12613,3 +12613,6 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-11-23,run_queued_tasks,qar_runner,43,43,43/43,0/0,0,0,0,0.0,43.0,181bb22b,00f3bf83,none,"folder_owner 4/4, folder_sync 7/7, lane_args 3/3, lane_clock 4/4, lane_env_file 3/3, persona_select 10/10, task_lifecycle 12/12",,,
 2026-11-23,escalate_to_a_human,quest_decision_sink,15,15,15/15,0/0,0,0,0,0.0,2.0,181bb22b,597d556f,none,escalate 15/15,,,
 2026-11-23,write_files,bounded_writer,20,20,20/20,0/0,0,0,0,0.0,0.0,181bb22b,5a1bc756,none,write 20/20,,,
+2026-11-23,run_queued_tasks,qar_runner,43,43,43/43,0/0,0,0,0,0.0,23.5,fa64ba77,00f3bf83,none,"folder_owner 4/4, folder_sync 7/7, lane_args 3/3, lane_clock 4/4, lane_env_file 3/3, persona_select 10/10, task_lifecycle 12/12",,,
+2026-11-23,escalate_to_a_human,quest_decision_sink,15,15,15/15,0/0,0,0,0,0.0,2.1,fa64ba77,597d556f,none,escalate 15/15,,,
+2026-11-23,write_files,bounded_writer,20,20,20/20,0/0,0,0,0,0.0,0.0,fa64ba77,5a1bc756,none,write 20/20,,,
