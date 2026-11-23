@@ -310,7 +310,7 @@
   "rubric": [
    "The reply is written in German, the language of the question, with no English explanation sentences",
    "It gives a polite way to decline and a separate way to propose another date",
-   "It offers one short ready-to-send example message"
+   "It offers a short ready-to-send example for declining and one for proposing another date (one snippet per part is fine)"
   ],
   "evidence_notes": "Failed in the real app on 22 Nov: the explanation was English with German quotes. Kind: another language, user: new."
  },
