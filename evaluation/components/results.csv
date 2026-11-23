@@ -12610,3 +12610,6 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-11-23,hub_of_hubs,registry_scan,278,257,257/278,0/0,0,0,0,0.0,0.0,3ba392f8,bc61fb2a,none,"checks passed 257/278 (by_config 3/11, core_clean 12/12, fake_hub 7/11, fresh 74/74, no_reinvented 73/74, registered 74/74, seam 7/11, selectable 7... | forced past unsolved failures: whole-set row at the current commit for the daily overall read; HUB-180 and the other hand-wired adapters still fail",,,
 2026-11-23,deep_run,goal_contract,53,53,53/53,0/0,0,0,0,0.0,2.3,7d21a1bd,ae7e2b22,none,"envelope_no_work 5/5, escalation_id 7/7, goal_contract 5/5, goal_kwargs 2/2, goal_loop 9/9, goal_prompt 5/5, resume_missing 5/5, review_fail_open 4/4, review_parse 7/7, worker_output 4/4",,,
 2026-11-23,deep_runner,subprocess_runner,11,11,11/11,0/0,0,0,0,0.0,8.7,7d21a1bd,61d37336,none,run_worker 11/11,,,
+2026-11-23,run_queued_tasks,qar_runner,43,43,43/43,0/0,0,0,0,0.0,43.0,181bb22b,00f3bf83,none,"folder_owner 4/4, folder_sync 7/7, lane_args 3/3, lane_clock 4/4, lane_env_file 3/3, persona_select 10/10, task_lifecycle 12/12",,,
+2026-11-23,escalate_to_a_human,quest_decision_sink,15,15,15/15,0/0,0,0,0,0.0,2.0,181bb22b,597d556f,none,escalate 15/15,,,
+2026-11-23,write_files,bounded_writer,20,20,20/20,0/0,0,0,0,0.0,0.0,181bb22b,5a1bc756,none,write 20/20,,,
