@@ -88,3 +88,12 @@ def test_a_confirmed_span_removed_instead_of_rewritten_is_kept_as_a_mistake_reco
     V.keep_mistakes(rows, str(tmp_path / "mistakes.jsonl"))
     kept = MistakeLog(tmp_path / "mistakes.jsonl").read("facts")
     assert [m.wrong for m in kept] == ["A claim nobody read."]
+
+
+def test_turn_grounding_includes_what_the_person_wrote():
+    """A draft that repeats a fact the person stated (their report is late) rests on their own message, so the claim views are shown it."""
+    from types import SimpleNamespace
+    from quest_ai_runner.intelligence.critical_thinking.decision_check.reply_views import turn_grounding
+    rs = SimpleNamespace(context_view="", gathered=[], user_message="write a 2 sentence status update to my boss saying the report is late and I need two more days")
+    assert "the report is late and I need two more days" in turn_grounding(rs)
+    assert "what the person wrote" not in turn_grounding(SimpleNamespace(context_view="", gathered=[], user_message=""))

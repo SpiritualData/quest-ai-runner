@@ -75,7 +75,10 @@ def turn_grounding(rs: Any, gathered: Optional[Sequence[Any]] = None) -> str:
     context = clip(str(getattr(rs, "context_view", "") or "").strip(), GROUNDING_CHARS // 2)
     reads = gathered if gathered is not None else (getattr(rs, "gathered", None) or [])
     # The reads share what the context leaves of the views' budget, so neither is cut off by the other.
-    return reads_text(answer_evidence(reads or []), max(READ_MIN_CHARS, GROUNDING_CHARS - len(context) - 400)) + (f"\n- the context the reply was written from: {context}" if context else "")
+    said = clip(str(getattr(rs, "user_message", "") or "").strip(), 600)      # what the person stated is a fact the reply may repeat: a draft saying their report is late rests on it
+    return (reads_text(answer_evidence(reads or []), max(READ_MIN_CHARS, GROUNDING_CHARS - len(context) - 400))
+            + (f"\n- the context the reply was written from: {context}" if context else "")
+            + (f"\n- what the person wrote this turn (facts they state about themselves are supported): {said}" if said else ""))
 
 
 def present_text(participants: Sequence[Any]) -> str:

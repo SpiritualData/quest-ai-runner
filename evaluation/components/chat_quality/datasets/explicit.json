@@ -2676,6 +2676,21 @@
         "Does not claim a reminder was set, and does not ask the person which quest they mean"
       ],
       "evidence_notes": "Real app, 23 Nov: the reply described a habit reminder with no button names and treated the goal as a habit. Kind: about Quest itself, vague or misspelled. User: new. Same guide-search class as the 20 Nov two-part reminder miss."
+    },
+    {
+      "id": "EXP-097",
+      "dataset": "explicit",
+      "area": "plan or draft: short status message to a boss",
+      "quest_key": "family",
+      "message": "write a 2 sentence status update to my boss saying the report is late and I need two more days",
+      "expected_routing": "inline",
+      "forbid_writes": true,
+      "rubric": [
+        "Exactly two sentences, written as the message itself, not a description of one",
+        "One sentence says the report is late and the other asks for two more days (both facts present)",
+        "Does not ask which report or which boss, and does not claim anything was sent"
+      ],
+      "evidence_notes": "Real app, 23 Nov: two sentences but neither said the report was late or the two days; the draft lost its content. Kind: plan or draft, user: new. Same class as the 21 Nov bio and meeting-decline drafts."
     }
   ]
 }
