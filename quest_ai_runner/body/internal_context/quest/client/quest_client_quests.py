@@ -977,6 +977,9 @@ class QuestsMixin:
     def add_quest_note(self, quest_id: str, text: str,
                        *, author_label: Optional[str] = None,
                        relayed_author_email: Optional[str] = None,
+                       source: Optional[str] = None,
+                       source_date: Optional[str] = None,
+                       source_excerpt: Optional[str] = None,
                        idempotency_key: Optional[str] = None) -> WriteResult:
         """POST /api/quests/{quest_id}/notes: append a note; returns a ``WriteResult`` whose data is the
         updated notes list (oldest to newest) when Quest sends one.
@@ -1004,6 +1007,9 @@ class QuestsMixin:
         (HTTP 400) with NOTHING saved, so pass a clean address or leave this None.
         """
         body: Dict[str, Any] = {"text": text}
+        for key, value in (("source", source), ("source_date", source_date), ("source_excerpt", source_excerpt)):
+            if value:       # where the note came from; ``save_daily_reflection_note`` is the usual caller
+                body[key] = str(value)
         if author_label and str(author_label).strip():
             body["author_label"] = str(author_label).strip()[:60]
         if relayed_author_email and str(relayed_author_email).strip():

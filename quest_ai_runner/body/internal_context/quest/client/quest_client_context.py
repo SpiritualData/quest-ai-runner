@@ -152,6 +152,50 @@ class ContextEntriesMixin:
             log.warning("get_daily_reflection failed (date=%s): %s", date, e)
             return {}
 
+    def list_daily_reflection_notes(self, date: str) -> List[Dict[str, Any]]:
+        """GET /api/daily-plan/reflection-notes?date=YYYY-MM-DD: the quest notes already saved for one
+        daily reflection, across all of the person's quests.
+
+        These are the notes the Daily Reflection screen shows as already saved when the person
+        reopens that day (they are quest notes tagged ``source: daily_reflection`` with
+        ``source_date`` = the reflection's date, the date of the entry the reflection belongs to).
+        Each item is ``{note_id, quest_id, quest_name, quote, source_excerpt}``. Returns [] on any error.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/daily-plan/reflection-notes", params={"date": date}) or {}
+            return [n for n in (resp.get("notes") or []) if isinstance(n, dict)] if isinstance(resp, dict) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_daily_reflection_notes failed (date=%s): %s", date, e)
+            return []
+
+    def save_daily_reflection_note(self, quest_id: str, text: str, *, date: str,
+                                   author_label: Optional[str] = None,
+                                   idempotency_key: Optional[str] = None) -> WriteResult:
+        """Save one note as part of the daily reflection for ``date`` (POST /api/quests/{quest_id}/notes
+        with ``source="daily_reflection"`` and ``source_date=date``), so it appears in the Daily
+        Reflection for that day as already saved, on the quest it concerns.
+
+        ``date`` is the entry date (the day the entry plans), the same one the screen passes. The
+        returned ``WriteResult.id`` is the saved note's id (empty when Quest did not echo it); a
+        failure raises ``QuestWriteError``. An API-key caller's identical text inside 24 hours is
+        returned, not added again, and ``idempotency_key`` makes a retry safe.
+        """
+        result = self.add_quest_note(quest_id, text, author_label=author_label, source="daily_reflection",
+                                     source_date=date, idempotency_key=idempotency_key)
+        mine = [n for n in (result.data if isinstance(result.data, list) else [])
+                if isinstance(n, dict) and n.get("text") == text and n.get("source_date") == date]
+        if mine:
+            result.id = str(mine[-1].get("note_id") or "")
+        return result
+
+    def edit_daily_reflection_note(self, quest_id: str, note_id: str, text: str) -> WriteResult:
+        """PATCH /api/quests/{quest_id}/notes/{note_id}: rewrite one note's text (only that; author, source and
+        date stay). For a note this caller saved itself; a person's note is never rewritten. Raises
+        ``QuestWriteError`` on failure."""
+        return self._write("PATCH", f"/api/quests/{quest_id}/notes/{note_id}", body={"text": text},
+                           label="Editing the reflection note")
+
     def get_period_reflection(self, period: str = "week", *, use_previous: bool = False,
                               tz: Optional[str] = None) -> Dict[str, Any]:
         """GET /api/period-review/{period}/current — one period review's REVIEW block.
