@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 log = logging.getLogger(__name__)
 
@@ -101,6 +101,14 @@ def with_readable_kpis(text: str, output: str) -> str:
     return (stripped + "\n\n**KPIs this run**\n" + "\n".join(lines)).strip()
 
 
+def _keep_valid(items: List[Dict[str, Any]], is_valid: Callable[[Dict[str, Any]], bool], problem: str) -> List[Dict[str, Any]]:
+    """The items that pass ``is_valid``; logs one warning naming ``problem`` when any were left out."""
+    kept = [i for i in items if is_valid(i)]
+    if len(kept) != len(items):
+        log.warning("%s; %d left out", problem, len(items) - len(kept))
+    return kept
+
+
 def report_run(client: Any, quest_id: str, autopilot_id: str, run_task_id: str, output: str) -> bool:
     """Send the run's KPI report to the backend. True when it was recorded; never raises (a finished run stays finished)."""
     data = parse_report(output)
@@ -110,14 +118,13 @@ def report_run(client: Any, quest_id: str, autopilot_id: str, run_task_id: str, 
     new = [{k: v for k, v in n.items() if k in ("name", "kind", "definition", "metric_id") and v not in (None, "")} for n in data.get("new_kpis") or [] if isinstance(n, dict)]
     # Quest requires a name, a kind and a definition on each new KPI and refuses the WHOLE report (values included) when one lacks them,
     # so an incomplete definition is left out here and the values still land.
-    complete = [n for n in new if n.get("name") and str(n.get("kind") or "").strip().lower() in ("count", "percent") and n.get("definition")]
-    if len(complete) != len(new):
-        log.warning("autopilot %s run %s defined a KPI without a name, kind or definition; it was left out", autopilot_id, run_task_id)
-    new = complete
-    values = [{k: v for k, v in item.items() if k in ("kpi_id", "name", "value", "blocker")} for item in data["values"]
-              if isinstance(item, dict) and isinstance(item.get("value"), (int, float)) and not isinstance(item.get("value"), bool)]
-    if len(values) != len([i for i in data["values"] if isinstance(i, dict)]):
-        log.warning("autopilot %s run %s reported a KPI without a number; those were left out", autopilot_id, run_task_id)
+    where = f"autopilot {autopilot_id} run {run_task_id}"
+    new = _keep_valid(new, lambda n: bool(n.get("name") and str(n.get("kind") or "").strip().lower() in ("count", "percent") and n.get("definition")),
+                      f"{where} defined a KPI without a name, kind or definition")
+    reported = [i for i in data["values"] if isinstance(i, dict)]
+    values = [{k: v for k, v in item.items() if k in ("kpi_id", "name", "value", "blocker")}
+              for item in _keep_valid(reported, lambda i: isinstance(i.get("value"), (int, float)) and not isinstance(i.get("value"), bool),
+                                      f"{where} reported a KPI without a number")]
     try:
         result = client.post_autopilot_kpi_report(quest_id, autopilot_id, run_task_id, values, new or None)
         if not result:  # a WriteResult is falsy when Quest refused or failed the write without raising
