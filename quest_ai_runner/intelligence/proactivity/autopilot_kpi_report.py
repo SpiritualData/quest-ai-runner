@@ -114,6 +114,9 @@ def report_run(client: Any, quest_id: str, autopilot_id: str, run_task_id: str, 
         log.warning("autopilot %s run %s reported a KPI without a number; those were left out", autopilot_id, run_task_id)
     try:
         result = client.post_autopilot_kpi_report(quest_id, autopilot_id, run_task_id, values, new or None)
+        if not result:  # a WriteResult is falsy when Quest refused or failed the write without raising
+            log.warning("autopilot %s run %s: Quest did not record the KPI report: %s", autopilot_id, run_task_id, getattr(result, "detail", "") or result)
+            return False
         body = getattr(result, "data", None) if not isinstance(result, dict) else result
         unknown = (body or {}).get("unknown") if isinstance(body, dict) else None
         if unknown:

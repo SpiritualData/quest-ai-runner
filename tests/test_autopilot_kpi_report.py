@@ -16,6 +16,7 @@ class Client:
         if self.fail:
             raise RuntimeError("503")
         self.calls.append(args)
+        return {"recorded": [v["name"] for v in args[3]]}
 
 
 def test_parse_reads_the_last_valid_block():
@@ -73,3 +74,13 @@ def test_a_value_without_a_number_is_left_out_and_unknown_names_make_it_false():
         def post_autopilot_kpi_report(self, *args):
             return {"recorded": [], "unknown": ["Ghost"]}
     assert kr.report_run(Unknown(), "q", "a", "t", text) is False
+
+
+def test_a_write_quest_refused_without_raising_reports_false():
+    from quest_ai_runner.body.internal_context.quest.client.quest_client_support import WriteResult
+    from quest_ai_runner.body.internal_context.quest.client.quest_client_support import ToolStatus
+
+    class Refused(Client):
+        def post_autopilot_kpi_report(self, *args):
+            return WriteResult({}, ToolStatus.REFUSED, detail="403 not a member")
+    assert kr.report_run(Refused(), "q", "a", "t", OUTPUT) is False
