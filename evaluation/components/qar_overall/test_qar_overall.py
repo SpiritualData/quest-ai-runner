@@ -190,6 +190,15 @@ def test_a_component_that_declares_nothing_keeps_the_conservative_rule(fresh_row
     assert combine.current("staleness", row(6, 6, sha="abc1234")).startswith("stale")
 
 
+def test_committing_the_run_logs_is_not_a_code_change(monkeypatch):
+    """Committing results.csv, per_case.csv or runs.csv never stales a row (the conservative rule reads any evaluation file)."""
+    seen = {}
+    monkeypatch.setattr(combine, "git", lambda *args: seen.setdefault("args", args) and "")
+    assert combine.committed_changes("abc1234") == []
+    excluded = {a for a in seen["args"] if a.startswith(":(exclude)")}
+    assert excluded == {f":(exclude){p}" for p in (combine.CONFIG.results, combine.CONFIG.per_case, combine.CONFIG.runs_log)}
+
+
 def test_the_dependency_patterns_name_no_whole_tree_for_a_single_solution_component():
     patterns = combine.dependency_patterns("staleness")
     assert "evaluation/components/staleness/*" in patterns and "quest_ai_runner/*" not in patterns

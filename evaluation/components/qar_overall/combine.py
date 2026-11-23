@@ -89,9 +89,11 @@ def head():
 @lru_cache(maxsize=None)
 def committed_changes(sha):
     """Measured files changed by commits since ``sha`` (the working tree is not compared: rows are recorded from committed
-    code, and other people's uncommitted edits are not what any row measured). None when the commit is unknown here."""
+    code, and other people's uncommitted edits are not what any row measured). None when the commit is unknown here.
+    The three logs a run writes (results, per-case, runs) are not code, the same exclusions as esoi's own staleness rule,
+    so committing a recorded row never makes the rows of components that declare no dependencies stale."""
     out = git("diff", "--name-only", sha, "HEAD", "--", *own_code_paths(CONFIG), CONFIG.evaluation_dir,
-              f":(exclude){CONFIG.results}")
+              *(f":(exclude){log}" for log in (CONFIG.results, CONFIG.per_case, CONFIG.runs_log)))
     return None if out is None else out.split()
 
 
