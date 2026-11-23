@@ -108,6 +108,12 @@ def report_run(client: Any, quest_id: str, autopilot_id: str, run_task_id: str, 
         log.info("autopilot %s run %s ended without a KPI REPORT block", autopilot_id, run_task_id)
         return False
     new = [{k: v for k, v in n.items() if k in ("name", "kind", "definition", "metric_id") and v not in (None, "")} for n in data.get("new_kpis") or [] if isinstance(n, dict)]
+    # Quest requires a name, a kind and a definition on each new KPI and refuses the WHOLE report (values included) when one lacks them,
+    # so an incomplete definition is left out here and the values still land.
+    complete = [n for n in new if n.get("name") and str(n.get("kind") or "").strip().lower() in ("count", "percent") and n.get("definition")]
+    if len(complete) != len(new):
+        log.warning("autopilot %s run %s defined a KPI without a name, kind or definition; it was left out", autopilot_id, run_task_id)
+    new = complete
     values = [{k: v for k, v in item.items() if k in ("kpi_id", "name", "value", "blocker")} for item in data["values"]
               if isinstance(item, dict) and isinstance(item.get("value"), (int, float)) and not isinstance(item.get("value"), bool)]
     if len(values) != len([i for i in data["values"] if isinstance(i, dict)]):

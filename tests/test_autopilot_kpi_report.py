@@ -84,3 +84,14 @@ def test_a_write_quest_refused_without_raising_reports_false():
         def post_autopilot_kpi_report(self, *args):
             return WriteResult({}, ToolStatus.REFUSED, detail="403 not a member")
     assert kr.report_run(Refused(), "q", "a", "t", OUTPUT) is False
+
+
+def test_an_incomplete_new_kpi_is_left_out_and_the_values_still_post():
+    """Quest refuses the whole report (422) when a new KPI lacks its definition, so the runner drops that one definition, not the values."""
+    out = ('KPI REPORT\n{"values": [{"name": "Replies", "value": 2, "blocker": ""}], "new_kpis": [{"name": "Replies", "kind": "count", "definition": "Replies sent this run"},'
+           ' {"name": "Vague", "kind": "count", "definition": ""}, {"name": "Odd", "kind": "score", "definition": "x"}]}\nEND KPI REPORT')
+    client = Client()
+    assert kr.report_run(client, "q1", "ap1", "t1", out) is True
+    sent_new = client.calls[0][4]
+    assert [n["name"] for n in sent_new] == ["Replies"]
+    assert [v["name"] for v in client.calls[0][3]] == ["Replies"]
