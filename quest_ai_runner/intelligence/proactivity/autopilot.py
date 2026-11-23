@@ -277,6 +277,12 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
             return False
         return autopilot_kpi_report.report_run(self._client, quest_id, autopilot_id, task_id, output)
 
+    def report_suggestion_statuses(self, output: str) -> int:
+        """At the end of an autopilot run: send the improvement ideas the run reports as done or failed (its ``SUGGESTION STATUS`` block, asked for
+        only by the quest_improvements source) to Quest, which updates each and emails its suggester. 0 when the run reported none; never raises."""
+        from quest_ai_runner.intelligence.proactivity.autopilot_purpose_improvements import report_statuses
+        return report_statuses(self._client, output or "")
+
     def settle_run_context(self, task_id: str, status: str) -> bool:
         """The executor's word on how a run ended: ``done`` commits the context watermarks this run staged, anything else drops them.
 

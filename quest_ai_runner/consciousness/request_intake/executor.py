@@ -682,12 +682,13 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
             self._safe(self._context_bundle.mark_seen)
         self.measure_milestone_work(text, result)
         # The raw output the run's KPI REPORT block is read from, taken before the block is stripped from what the person reads.
-        kpi_source = ""
+        kpi_source = status_source = ""
         if _is_autopilot_run(task) and hasattr(result, "text"):
             # The run's KPIs read as plain lines in its output, never as the raw JSON block it ends with.
             from quest_ai_runner.intelligence.proactivity import autopilot_kpi_report
             deep_output = "\n\n".join(str(getattr(d, "output", "") or "") for d in (getattr(result, "deep_results", None) or []))
             kpi_source = deep_output if autopilot_kpi_report.parse_report(deep_output) is not None else str(result.text or "")
+            status_source = f"{str(result.text or '')}\n\n{deep_output}"   # the last SUGGESTION STATUS block wins, so the deep run's own comes last
             result.text = autopilot_kpi_report.with_readable_kpis(str(result.text or ""), deep_output)
         outcome = self.report(task_id, result, conv_id, request_text=text,
                               rep_preamble=rep_preamble,
@@ -704,6 +705,8 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
             # what the sheet most needs to show). Only a cancelled or paused run reports nothing.
             if outcome.status in ("done", "needs_you", "incomplete", "failed") and _is_autopilot_run(task):
                 self._safe(lambda: self._autopilot.report_run_kpis(task, kpi_source))
+                # Improvement ideas the run applied or could not (the quest_improvements source's SUGGESTION STATUS block): status and suggester mail.
+                self._safe(lambda: self._autopilot.report_suggestion_statuses(status_source))
         return outcome
 
     def measure_milestone_work(self, text: str, result: OrchestratorResult) -> None:

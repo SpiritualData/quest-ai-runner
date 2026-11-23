@@ -331,3 +331,28 @@ def test_quest_improvements_source_spends_nothing_when_nothing_is_unacted_and_te
     due = improvements_due(busy)
     assert [d["id"] for d in due] == ["t1"] and busy.calls == ["GET", "POST"]
     assert improvements_due(Quest(None)) == []
+
+
+def test_quest_improvements_status_block_is_sent_and_the_template_line_never_is():
+    from quest_ai_runner.intelligence.proactivity.autopilot_purpose_improvements import RULES, parse_statuses, report_statuses
+
+    assert parse_statuses(RULES) == []                     # the brief's own example sends nothing if the run echoes it
+    output = ("Worked two ideas.\n\nSUGGESTION STATUS\n- atask_abc123 | done | Added a dark theme switch in Settings. It follows the phone's setting.\n"
+              "atask_def456 | failed | The calendar API refused the scope.\nEND SUGGESTION STATUS\n")
+    assert [(i["task_id"], i["status"]) for i in parse_statuses(output)] == [("atask_abc123", "done"), ("atask_def456", "failed")]
+
+    class Quest:
+        def __init__(self):
+            self.calls = []
+
+        def send_request(self, method, path, **kw):
+            self.calls.append((method, path, kw.get("body")))
+            if "def456" in path:
+                raise RuntimeError("409")
+            return {"told": True}
+
+    quest = Quest()
+    assert report_statuses(quest, output) == 1
+    assert quest.calls[0] == ("POST", "/api/assistant-tasks/suggestions/atask_abc123/status",
+                              {"status": "done", "how": "Added a dark theme switch in Settings. It follows the phone's setting."})
+    assert report_statuses(quest, "no block here") == 0
