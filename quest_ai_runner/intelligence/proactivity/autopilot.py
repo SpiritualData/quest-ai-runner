@@ -47,6 +47,7 @@ from quest_ai_runner.consciousness.request_intake.local_time import now_in_zone
 from quest_ai_runner.intelligence.proactivity.autopilot_routing import route_goals
 from quest_ai_runner.intelligence.proactivity.autopilot_units import AUTOPILOT_RUN_KIND, label_of, on_duty, unit_named, units_of
 from quest_ai_runner.intelligence.proactivity.autopilot_sources import SOURCES, source_section
+from quest_ai_runner.intelligence.proactivity.autopilot_purpose_improvements import register_for as register_improvements_source
 from quest_ai_runner.intelligence.critical_thinking.esoi_application.autopilot_esoi import read_readiness, readiness_and_pick
 from quest_ai_runner.intelligence.proactivity import autopilot_kpi_report
 from quest_ai_runner.intelligence.proactivity.autopilot_result import RUN_BRIEF_HEADER, AutopilotResult, RunPlan, _quest_label, _quest_pass_lock, _task_label
@@ -124,6 +125,8 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                  structure_watch: Optional[Callable[[str, bool], Any]] = None,
                  escalation: Optional[Any] = None):
         self._client = client
+        if callable(getattr(client, "send_request", None)):
+            register_improvements_source(client)     # the quest_improvements work source reads Quest through this lane's client
         # The runner's escalation sink (``RunnerConfig.escalation``). Used for ONE thing here: the
         # visible ask raised when the daily budget stops a pass part-way (autopilot_budget_ask.py).
         # None keeps the old behaviour of a log line and a note only.

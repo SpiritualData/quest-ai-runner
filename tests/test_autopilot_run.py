@@ -310,3 +310,24 @@ def test_leftover_pass_tasks_are_retired_once_and_then_the_lane_stops_listing_fo
     lane._ensure_autopilot_pass()                    # finds none: done
     lane._ensure_autopilot_pass()                    # no list at all
     assert lane.retired == ["p1"] and lane.lists == 2
+
+
+def test_quest_improvements_source_spends_nothing_when_nothing_is_unacted_and_tells_suggesters_first():
+    from quest_ai_runner.intelligence.proactivity.autopilot_purpose_improvements import improvements_due
+
+    class Quest:
+        def __init__(self, state):
+            self.state, self.calls = state, []
+
+        def send_request(self, method, path, **kw):
+            self.calls.append(method)
+            return self.state
+
+    quiet = Quest({"total": 0, "to_tell": 0, "items": []})
+    assert improvements_due(quiet) == [] and quiet.calls == ["GET"]
+    busy = Quest({"total": 2, "to_tell": 1, "items": [
+        {"task_id": "t1", "kind": "awaiting_review", "what": "awaiting_review: Dark mode"},
+        {"task_id": "t2", "kind": "tell_suggester", "what": "tell_suggester: Old idea"}]})
+    due = improvements_due(busy)
+    assert [d["id"] for d in due] == ["t1"] and busy.calls == ["GET", "POST"]
+    assert improvements_due(Quest(None)) == []
