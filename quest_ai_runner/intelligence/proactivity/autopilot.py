@@ -48,6 +48,7 @@ from quest_ai_runner.intelligence.proactivity.autopilot_routing import route_goa
 from quest_ai_runner.intelligence.proactivity.autopilot_units import AUTOPILOT_RUN_KIND, label_of, on_duty, unit_named, units_of
 from quest_ai_runner.intelligence.proactivity.autopilot_sources import SOURCES, source_section
 from quest_ai_runner.intelligence.critical_thinking.esoi_application.autopilot_esoi import read_readiness, readiness_and_pick
+from quest_ai_runner.intelligence.proactivity import autopilot_kpi_report
 from quest_ai_runner.intelligence.proactivity.autopilot_result import RUN_BRIEF_HEADER, AutopilotResult, RunPlan, _quest_label, _quest_pass_lock, _task_label
 from quest_ai_runner.intelligence.proactivity.autopilot_budget_ask import budget_stop_escalation
 from quest_ai_runner.intelligence.proactivity.autopilot_gates import GatesMixin
@@ -263,6 +264,16 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                 self._close_adopted(ctx["adopted"], self._pass_task_id, quest_id, plan.notes_sink)
         return plan
 
+    def report_run_kpis(self, task: Dict[str, Any], output: str) -> bool:
+        """At the end of a finished autopilot run: send the KPI values the run reported (its ``KPI REPORT`` block) to the backend. False when the
+        run reported none or the backend refused; never raises."""
+        quest_id = str(task.get("goal_id") or task.get("quest_id") or "")
+        autopilot_id = str(task.get("autopilot_id") or "")
+        task_id = str(task.get("id") or task.get("task_id") or "")
+        if not (quest_id and autopilot_id and task_id):
+            return False
+        return autopilot_kpi_report.report_run(self._client, quest_id, autopilot_id, task_id, output)
+
     def settle_run_context(self, task_id: str, status: str) -> bool:
         """The executor's word on how a run ended: ``done`` commits the context watermarks this run staged, anything else drops them.
 
@@ -296,6 +307,9 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
                                                    proposal_open=bool(ctx.get("proposal_open")), may_propose=True) or None) if ctx else None,
             asked=ctx.get("asked"), intent_frame=ctx.get("intent_frame"), esoi_readiness=(readiness_and_pick(ctx.get("esoi_read"), own, unit.get("rep_id") or None)[0] if ctx else None),
             source_text=source_text)
+        reader = getattr(self._client, "get_autopilot_kpis", None)
+        kpi_read = (reader(quest_id, str(unit.get("id") or "")) if callable(reader) else {}) or {}
+        text = f"{text}\n\n{autopilot_kpi_report.brief_section(list(kpi_read.get('kpis') or []), kpi_read.get('feedback'))}"
         first_step = self._folder_first_step(quest, quest_id)
         return f"{RUN_BRIEF_HEADER}\n\n{first_step + chr(10) * 2 if first_step else ''}{text}"
 

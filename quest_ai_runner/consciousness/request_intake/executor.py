@@ -681,6 +681,11 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         if self._context_bundle is not None:
             self._safe(self._context_bundle.mark_seen)
         self.measure_milestone_work(text, result)
+        if _is_autopilot_run(task) and hasattr(result, "text"):
+            # The run's KPIs read as plain lines in its output, never as the raw JSON block it ends with.
+            from quest_ai_runner.intelligence.proactivity import autopilot_kpi_report
+            deep_output = "\n\n".join(str(getattr(d, "output", "") or "") for d in (getattr(result, "deep_results", None) or []))
+            result.text = autopilot_kpi_report.with_readable_kpis(str(result.text or ""), deep_output)
         outcome = self.report(task_id, result, conv_id, request_text=text,
                               rep_preamble=rep_preamble,
                               card_id=(task.get("card_id") or None),
@@ -692,6 +697,11 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
         # The news an autopilot run was handed advances its watermarks only now, once the run is known to have succeeded.
         if self._autopilot is not None:
             self._safe(lambda: self._autopilot.settle_run_context(task_id, outcome.status))
+            # The run's KPI values and blockers go to the Autopilots sheet once the run has ended, blocked or incomplete runs included (their blocker is
+            # what the sheet most needs to show). Only a cancelled or paused run reports nothing.
+            if outcome.status in ("done", "needs_you", "incomplete", "failed") and _is_autopilot_run(task):
+                output = "\n\n".join(str(getattr(d, "output", "") or "") for d in (getattr(result, "deep_results", None) or [])) or str(getattr(result, "text", "") or "")
+                self._safe(lambda: self._autopilot.report_run_kpis(task, output))
         return outcome
 
     def measure_milestone_work(self, text: str, result: OrchestratorResult) -> None:

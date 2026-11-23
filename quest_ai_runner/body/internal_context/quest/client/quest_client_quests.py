@@ -1095,6 +1095,24 @@ class QuestsMixin:
             log.warning("list_autopilots failed for quest %s: %s", quest_id, e)
             return {}
 
+    def get_autopilot_kpis(self, quest_id: str, autopilot_id: str) -> Dict[str, Any]:
+        """GET /api/quests/{quest_id}/autopilots/{autopilot_id}/kpis -- ``{kpis, feedback}``: the KPI definitions and what people said for the next run
+        (the verdict on the last run, the newest KPI comments). ``{}`` when the read fails."""
+        try:
+            return dict(self._request("GET", f"/api/quests/{quest_id}/autopilots/{autopilot_id}/kpis") or {})
+        except Exception as e:  # noqa: BLE001 -- the brief then asks the run to define its own
+            log.warning("get_autopilot_kpis failed for quest %s autopilot %s: %s", quest_id, autopilot_id, e)
+            return {}
+
+    def post_autopilot_kpi_report(self, quest_id: str, autopilot_id: str, run_task_id: str, values: List[Dict[str, Any]],
+                                  new_kpis: Optional[List[Dict[str, Any]]] = None) -> WriteResult:
+        """POST /api/quests/{quest_id}/autopilots/{autopilot_id}/kpi-report -- what the run reported for each KPI (count: this run only; percent: current),
+        each with its one-sentence blocker. ``new_kpis`` are the AI's own definitions, stored only when the autopilot has none."""
+        body: Dict[str, Any] = {"run_task_id": run_task_id, "values": list(values)}
+        if new_kpis:
+            body["new_kpis"] = list(new_kpis)
+        return self._write("POST", f"/api/quests/{quest_id}/autopilots/{autopilot_id}/kpi-report", body=body, label="Recording the run's KPIs")
+
     def get_autopilot_routing(self, quest_id: str, day: str) -> Dict[str, Any]:
         """GET /api/quests/{quest_id}/autopilots/routing/{day} -- the day's record of which autopilot works which goal and why (``{routes: [...]}``,
         empty when none was written). ``day`` is the quest-zone date, YYYY-MM-DD. ``{}`` when the read fails."""
