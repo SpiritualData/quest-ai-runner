@@ -46,7 +46,7 @@ from quest_ai_runner.intelligence.proactivity.autopilot_personas import (
 from quest_ai_runner.consciousness.request_intake.local_time import now_in_zone
 from quest_ai_runner.intelligence.proactivity.autopilot_routing import route_goals
 from quest_ai_runner.intelligence.proactivity.autopilot_units import AUTOPILOT_RUN_KIND, label_of, on_duty, unit_named, units_of
-from quest_ai_runner.intelligence.proactivity.autopilot_sources import SOURCES, source_section
+from quest_ai_runner.intelligence.proactivity.autopilot_sources import SOURCES, also_checks_text, source_section
 from quest_ai_runner.intelligence.proactivity.autopilot_purpose_improvements import register_for as register_improvements_source
 from quest_ai_runner.intelligence.critical_thinking.esoi_application.autopilot_esoi import read_readiness, readiness_and_pick
 from quest_ai_runner.intelligence.proactivity import autopilot_kpi_report
@@ -247,9 +247,13 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         ctx = None if source_name else self._read_quest_context(quest, quest_id, unit, dry_run)
         assigned = self._assigned_goals(quest, quest_id, unit, ctx) if ctx else []
         own = capped_instructions(unit.get("instructions"), f"autopilot {unit['id']}")
-        if not own and not assigned and not source_text:
+        # Work sources this autopilot ALSO checks (its also_checks): each a no-model read; only what is due joins the brief.
+        also_text = None if source_name else also_checks_text(unit, self._now())
+        if not own and not assigned and not source_text and not also_text:
             return plan.skip("no goals relevant to this scope")
         text = self._compose_run(quest, quest_id, unit, ctx, assigned, own, source_text)
+        if also_text:
+            text = f"{text}\n\n{also_text}"
         plan.text = text
         plan.status = "suggested" if str(unit.get("mode") or "suggest") != "act" else "act"
         if ctx is not None and not dry_run:

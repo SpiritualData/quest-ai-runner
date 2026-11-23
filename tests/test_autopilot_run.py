@@ -321,6 +321,7 @@ def test_quest_improvements_source_spends_nothing_when_nothing_is_unacted_and_te
 
         def send_request(self, method, path, **kw):
             self.calls.append(method)
+            self.paths = getattr(self, "paths", []) + [(path, kw.get("body"))]
             return self.state
 
     quiet = Quest({"total": 0, "to_tell": 0, "items": []})
@@ -329,7 +330,11 @@ def test_quest_improvements_source_spends_nothing_when_nothing_is_unacted_and_te
         {"task_id": "t1", "kind": "awaiting_review", "what": "awaiting_review: Dark mode"},
         {"task_id": "t2", "kind": "tell_suggester", "what": "tell_suggester: Old idea"}]})
     due = improvements_due(busy)
-    assert [d["id"] for d in due] == ["t1"] and busy.calls == ["GET", "POST"]
+    assert [d["id"] for d in due] == ["t1"] and busy.calls == ["GET", "POST", "POST"]
+    # The idea awaiting review is noted, so the next pass does not start a model run on it again while it waits on a person.
+    assert busy.paths[-1] == ("/api/assistant-tasks/suggestions/follow-up/noted", {"task_ids": ["t1"]})
+    approved = Quest({"total": 1, "to_tell": 0, "items": [{"task_id": "t3", "kind": "approved_not_worked", "what": "approved: X"}]})
+    assert [d["id"] for d in improvements_due(approved)] == ["t3"] and approved.calls == ["GET"]
     assert improvements_due(Quest(None)) == []
 
 
@@ -356,3 +361,38 @@ def test_quest_improvements_status_block_is_sent_and_the_template_line_never_is(
     assert quest.calls[0] == ("POST", "/api/assistant-tasks/suggestions/atask_abc123/status",
                               {"status": "done", "how": "Added a dark theme switch in Settings. It follows the phone's setting."})
     assert report_statuses(quest, "no block here") == 0
+
+
+def test_also_checks_adds_due_ideas_to_the_autopilots_own_run_and_nothing_when_none_are_due():
+    """The retention autopilot keeps its own work and ALSO checks quest_improvements: the check is one no-model read, and only due ideas
+    join its brief. Nothing due (or an unknown slug) adds nothing, so the run is exactly what it was without the check."""
+    from datetime import datetime, timezone
+    from quest_ai_runner.intelligence.proactivity.autopilot_purpose_improvements import improvements_purpose
+    from quest_ai_runner.intelligence.proactivity.autopilot_sources import SOURCES, also_checks_text, register_source
+
+    class Quest:
+        def __init__(self, state):
+            self.state, self.calls = state, []
+
+        def send_request(self, method, path, **kw):
+            self.calls.append((method, path))
+            return self.state
+
+    now = datetime.now(timezone.utc)
+    saved = SOURCES.get("quest_improvements")
+    try:
+        quiet = Quest({"total": 0, "items": []})
+        register_source(improvements_purpose(quiet))
+        assert also_checks_text({"also_checks": ["quest_improvements", "no_such_source"]}, now) is None
+        assert quiet.calls == [("GET", "/api/assistant-tasks/suggestions/follow-up")]
+        assert also_checks_text({}, now) is None
+        busy = Quest({"total": 1, "to_tell": 0, "items": [{"task_id": "t9", "kind": "approved_not_worked", "what": "approved_not_worked: Dark mode"}]})
+        register_source(improvements_purpose(busy))
+        text = also_checks_text({"also_checks": ["quest_improvements"]}, now)
+        assert text and text.startswith("ALSO ON THIS RUN (quest_improvements)") and "Dark mode (task id t9)" in text
+        assert "SUGGESTION STATUS" in text
+    finally:
+        if saved is not None:
+            SOURCES["quest_improvements"] = saved
+        else:
+            SOURCES.pop("quest_improvements", None)

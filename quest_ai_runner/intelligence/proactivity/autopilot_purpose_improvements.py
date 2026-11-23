@@ -2,7 +2,8 @@
 
 Quest AI is the rep that answers for the app itself across all users. This source is the autopilot half: before any model is asked, one cheap
 read (``GET /api/assistant-tasks/suggestions/follow-up``) says what is unacted: ideas waiting for a decision, approved ideas not yet worked, and
-resolved ideas whose suggester has not been told. The telling is deterministic (the backend mails the suggester as Quest AI with the team
+resolved ideas whose suggester has not been told. An idea awaiting review is listed once: the pass notes it (``/noted``), since after the
+recommendation it waits on a person. The telling is deterministic (the backend mails the suggester as Quest AI with the team
 groups on BCC, once each) and runs here with no model. Only what still needs judgment is listed as due; when nothing is, the run is refused
 and closed as skipped, so a quiet day spends no tokens.
 
@@ -62,8 +63,21 @@ def improvements_due(client: Any) -> List[Mapping[str, Any]]:
         return []
     if state.get("to_tell"):
         tell_suggesters(client)
+    due = [item for item in state.get("items") or [] if item.get("kind") != "tell_suggester"]
+    note_awaiting(client, [str(item.get("task_id")) for item in due if item.get("kind") == "awaiting_review"])
     return [{"id": str(item.get("task_id")), "what": f"{item.get('what') or item.get('title') or ''} (task id {item.get('task_id')})"}
-            for item in state.get("items") or [] if item.get("kind") != "tell_suggester"]
+            for item in due]
+
+
+def note_awaiting(client: Any, task_ids: List[str]) -> None:
+    """Tell Quest these ideas awaiting review are taken into this run, so the next state read lists each once, not every day while it waits
+    on a person (its review ask was already raised when it was filed). No model."""
+    if not task_ids:
+        return
+    try:
+        client.send_request("POST", f"{PATH}/noted", body={"task_ids": task_ids})
+    except Exception as error:  # noqa: BLE001 -- a failed stamp only means the idea is listed again next pass
+        log.warning("quest_improvements: could not note ideas awaiting review: %s", error)
 
 
 def improvements_purpose(client: Any) -> WorkSource:

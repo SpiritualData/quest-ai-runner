@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, Mapping, Sequence
+from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 from quest_ai_runner.self.integrity.prompts.prompt_specs import US_SPELLING_RULE
 
@@ -40,6 +40,29 @@ def register_source(purpose: WorkSource) -> WorkSource:
     """Make ``purpose`` available to gated autopilots by its name (a consumer's own purposes ride the same registry)."""
     SOURCES[purpose.name] = purpose
     return purpose
+
+
+def also_section(source: WorkSource, items: Sequence[Mapping[str, Any]]) -> str:
+    """The block an ``also_checks`` source adds to an autopilot's OWN run: the run keeps its scope, and also does this work, under these rules."""
+    due_lines = "\n".join(f"- {item.get('what') or item.get('id')}" for item in items)
+    return "\n\n".join([
+        f"ALSO ON THIS RUN ({source.name}): {source.scope} A no-model check found the items below due, so do this too, after or alongside your own work.",
+        f"Standing rules of this work:\n{source.rules.strip()}",
+        f"Due now ({len(items)}):\n{due_lines}"])
+
+
+def also_checks_text(unit: Mapping[str, Any], now: datetime) -> Optional[str]:
+    """The ``also_checks`` sections of an autopilot whose sources have something due, or None. Each source's ``due_items`` is its own cheap
+    check (no model), so an autopilot with nothing due in them composes exactly the run it would have without them. Unknown slugs are skipped."""
+    parts: List[str] = []
+    for name in list(unit.get("also_checks") or [])[:5]:
+        source = SOURCES.get(str(name or "").strip())
+        if source is None:
+            continue
+        items = list(source.due_items(now))
+        if items:
+            parts.append(also_section(source, items))
+    return "\n\n".join(parts) or None
 
 
 def source_section(source: WorkSource, items: Sequence[Mapping[str, Any]]) -> str:
