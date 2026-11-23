@@ -561,6 +561,8 @@ class QuestsMixin:
 
         ``strategy_id`` is optional: pass ``None`` (or ``""``) for a quest with no strategies, or for a habit that serves
         none, and Quest lists the habit as uncategorized. A strategy that is named must exist on the quest (else 404).
+        Weekdays: a non-empty ``days`` list of weekdays (``["Tue", "Wed", "Thu", "Fri"]``) always limits the habit to those weekdays, whatever
+        ``frequency`` says (Quest stores daily plus weekdays as weekly on them, and daily plus all seven days as plain daily), so say the days you mean.
         ``fields`` passes the endpoint's optional keys through in snake_case (``description``,
         ``days``, ``time``, ``day_times`` (a different time on different weekdays, see ``update_habit``), ``duration``, ``linked_goal_id`` ...); ``start_date`` defaults to today.
         ``assigned_to_user_ids`` is sent as ``assigned_to_user_ids`` only when given: left out (``None``) the backend makes
@@ -581,7 +583,7 @@ class QuestsMixin:
 
     def update_habit(self, habit_id: str, *, assigned_to_user_ids: Optional[List[str]] = None,
                      day_times: Optional[Dict[str, List[str]]] = None, **changes: Any) -> WriteResult:
-        """PUT /api/planning/habits/{habit_id}: change only the keys given (``name``, ``description``, ``time``, ``times``, ``duration``, ``frequency``, ``days``, ``enabled``, ``quest_id`` ...); ``time`` alone replaces an older ``times`` list; ``assigned_to_user_ids`` is sent only when given (``None`` leaves who the habit is for unchanged, an empty list makes it everyone's, a list names exactly those members; ``assign_habit`` only does this). ``day_times`` gives ONE habit a different time on different weekdays, ``{"Mon": ["07:30"], "Tue": ["05:00"]}`` (keys Mon to Sun, times HH:MM): those weekdays use their own times and every other weekday keeps ``time``/``times``; the whole map is replaced, an empty ``{}`` clears it and ``None`` leaves it unchanged (``create_habit`` takes ``day_times=`` too). Raises like ``create_habit``."""
+        """PUT /api/planning/habits/{habit_id}: change only the keys given (``name``, ``description``, ``time``, ``times``, ``duration``, ``frequency``, ``days``, ``enabled``, ``quest_id`` ...); ``days`` naming weekdays always limits the habit to those weekdays whatever ``frequency`` says (Quest stores daily plus weekdays as weekly on them); ``time`` alone replaces an older ``times`` list; ``assigned_to_user_ids`` is sent only when given (``None`` leaves who the habit is for unchanged, an empty list makes it everyone's, a list names exactly those members; ``assign_habit`` only does this). ``day_times`` gives ONE habit a different time on different weekdays, ``{"Mon": ["07:30"], "Tue": ["05:00"]}`` (keys Mon to Sun, times HH:MM): those weekdays use their own times and every other weekday keeps ``time``/``times``; the whole map is replaced, an empty ``{}`` clears it and ``None`` leaves it unchanged (``create_habit`` takes ``day_times=`` too). Raises like ``create_habit``."""
         body: Dict[str, Any] = dict(changes)
         if day_times is not None:
             body["day_times"] = {str(day): list(times) for day, times in day_times.items()}
