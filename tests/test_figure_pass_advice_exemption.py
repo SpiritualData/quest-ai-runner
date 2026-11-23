@@ -32,3 +32,13 @@ def test_a_general_knowledge_reach_verdict_keeps_a_conversion_figure_but_records
     # a quest's records sitting in the context do not make a general question's figures unsafe
     assert figures_exempt(turn(shape="default", sources=[{"adapter": "records", "items": ["quest-note:q1:0"]}]), {"reach": "general"}) is True
     assert figures_exempt(turn(shape="default", sources=[{"adapter": "records", "items": ["quest-note:q1:0"]}]), {"reach": "own_records"}) is False
+
+
+def test_a_general_knowledge_reply_is_marked_once_and_a_records_turn_is_not():
+    from quest_ai_runner.intelligence.mind.orchestrator_run_loop import mark_general_knowledge
+    rs = turn(shape="default")
+    assert mark_general_knowledge("375 F is about 190 C.", rs, {"reach": "general"}).endswith("(General knowledge, not from your records.)")
+    assert mark_general_knowledge("About 190 C, general knowledge.", rs, {"reach": "general"}) == "About 190 C, general knowledge."
+    assert mark_general_knowledge("190 C", rs, {"reach": "own_records"}) == "190 C"
+    assert mark_general_knowledge("190 C", turn(gathered=[{"text": "x", "locator": "file:a"}]), {"reach": "general"}) == "190 C"
+    assert mark_general_knowledge("Sage freundlich ab und schlage einen neuen Termin vor, das ist hoeflich.", rs, {"reach": "general"}).endswith("hoeflich.")

@@ -5,6 +5,7 @@ run-local namespace ``rs`` that ``RunMixin.run`` builds and hands from one phase
 """
 from __future__ import annotations
 
+import re
 import logging
 import json
 import time
@@ -66,11 +67,25 @@ def figures_exempt(rs, reach=None) -> bool:
     # ("85 F is 29.4 C") is arithmetic, not a reading of the person's data, so the figure pass keeps it. The quest's records sitting in the
     # assembled context do not count here (the question needed none); a turn that read anything (gathered text) stays checked. The pass
     # cut these figures and left "This is general knowledge." (live 20 to 23 Nov: 350 F, 500 ml, 85 F, 2.5 miles, 375 F).
-    if str((reach or {}).get("reach") or "").lower() == "general" and not getattr(rs, "gathered", None):
+    if str((reach or {}).get("reach") or "").lower() == "general" and not answer_evidence(getattr(rs, "gathered", None) or []):
         return True
     if turn_holds_records(getattr(rs, "_sources", None), getattr(rs, "gathered", None)):
         return False
     return standard_for(rs.plan, user_intent=rs.turn_user_intent, delivery=rs.turn_delivery).shape == SHAPE_ADVICE
+
+
+def mark_general_knowledge(text: str, rs, reach=None) -> str:
+    """A reply to a general-knowledge question (reach judge) that read nothing says once, in a few words, that it is general knowledge: the writer's own
+    sentence for it is kept when present, else one short note is added (live 23 Nov: the 375 F conversion came back right but unmarked)."""
+    t = (text or "").rstrip()
+    if not t or str((reach or {}).get("reach") or "").lower() != "general" or answer_evidence(getattr(rs, "gathered", None) or []):
+        return text
+    if "general knowledge" in t.lower():
+        return text
+    words = re.findall(r"[a-z]+", t.lower())
+    if sum(w in {"the", "is", "and", "to", "of", "a", "it", "that", "for", "set"} for w in words) < max(1, len(words) // 12):
+        return text    # not written in English: an English note would put the wrong language in the reply
+    return t + "\n\n(General knowledge, not from your records.)"
 
 
 class RunLoopMixin:
@@ -228,7 +243,9 @@ class RunLoopMixin:
                 # (the first 5,000 characters of the context, 2,500 of each read) made true figures read as unsupported and took whole sentences out.
                 # Not held to an ADVICE reply (a general how-to answer): its amounts and times ("ten minutes a day") are suggestions, not readings
                 # of the person's records, and cutting them took the sentence (and the list item) out of the very answer the person asked for.
-                advice_reply = figures_exempt(rs, self.reach_verdict(rs.user_message))
+                _reach = self.reach_verdict(rs.user_message)
+                advice_reply = figures_exempt(rs, _reach)
+                res.text = mark_general_knowledge(res.text, rs, _reach)
                 dropped = []
                 if not advice_reply:
                     res.text, dropped = without_unsupported(rs, res.text, figure_evidence(rs))
