@@ -12640,3 +12640,6 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-11-24,hub_of_hubs,registry_scan,278,257,257/278,0/0,0,0,0,0.0,0.0,f4bed974,bc61fb2a,none,"checks passed 257/278 (by_config 3/11, core_clean 12/12, fake_hub 7/11, fresh 74/74, no_reinvented 73/74, registered 74/74, seam 7/11, selectable 7/11); registry reading (the same for every implementation): score 0.801 = mean(coverage 1.00, integration-by-config 0.38, no reinvented integration 0....",,,
 2026-11-24,deep_run,goal_contract,53,53,53/53,0/0,0,0,0,0.0,2.2,f4bed974,ae7e2b22,none,"envelope_no_work 5/5, escalation_id 7/7, goal_contract 5/5, goal_kwargs 2/2, goal_loop 9/9, goal_prompt 5/5, resume_missing 5/5, review_fail_open 4/4, review_parse 7/7, worker_output 4/4",,,
 2026-11-24,deep_runner,subprocess_runner,11,11,11/11,0/0,0,0,0,0.0,8.6,f4bed974,61d37336,none,run_worker 11/11,,,
+2026-11-24,route_a_request,planner_derived,41,0,0/41,0/0,41,0,0,,0.2,6048cc96,dd357d37,unknown,information_passed=0/0; act_passed=0/0; draft_passed=0/0; clarify_passed=0/0; private_passed=private set absent,,,
+2026-11-24,digest_by_need,digest_by_need,3,3,3/3,0/0,0,0,0,0.0,0.0,6048cc96,cf997400,none,"cases passed 3/3; model calls 0 (stubbed, no spend); largest prompt 8263 characters",,,
+2026-11-24,write_in_names,readable_guard,9,9,9/9,0/0,0,0,0,0.0,0.0,6048cc96,85651d79,none,outward 9/9,,,
