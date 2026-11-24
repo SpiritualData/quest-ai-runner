@@ -48,3 +48,12 @@ def test_stale_subagent_file_is_idle(tmp_path):
     old = time.time() - 3600
     os.utime(f, (old, old))
     assert subagent_work_in_flight(p) is None
+
+
+def test_pending_long_shell_command_is_not_idle(tmp_path):
+    p = tmp_path / "s.jsonl"
+    rec = {"message": {"content": [{"type": "tool_use", "id": "b", "name": "Bash", "input": {"command": "python -m esoi run x"}}]}}
+    _write(p, [rec])
+    assert "Bash" in subagent_work_in_flight(p)
+    _write(p, [rec, _res("b")])
+    assert subagent_work_in_flight(p) is None
