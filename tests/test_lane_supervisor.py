@@ -164,3 +164,11 @@ def test_default_names_and_state_dir(tmp_path):
     assert sup.default_lane_name("/x/team-a/qar.toml") == "team-a-qar"
     assert sup.default_lane_name(None) == "default"
     assert sup.default_state_dir("n", {"XDG_STATE_HOME": str(tmp_path)}) == tmp_path / "quest-ai-runner" / "lanes" / "n"
+
+
+def test_a_run_started_through_the_claude_wrapper_counts_as_in_flight():
+    """The wrapper execs claude-real, so an idle restart killed a running task on 2026-11-24."""
+    from quest_ai_runner.consciousness.request_intake.lane_supervisor import deep_run_in_flight
+
+    assert deep_run_in_flight(1, members=lambda _: [(5, "python"), (7, "claude-real")]) == (7, "claude-real")
+    assert deep_run_in_flight(1, members=lambda _: [(5, "python")]) is None

@@ -35,7 +35,7 @@ __all__ = ["LaneSpec", "default_lane_name", "default_state_dir", "default_comman
 RESTART_DELAY_SECONDS = 10.0
 STOP_GRACE_SECONDS = 15.0
 START_WAIT_SECONDS = 10.0
-DEEP_CHILD_COMMS: Tuple[str, ...] = ("claude", "node")
+DEEP_CHILD_COMMS: Tuple[str, ...] = ("claude", "claude-real", "node")
 
 
 @dataclass
