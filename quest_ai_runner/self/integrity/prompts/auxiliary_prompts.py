@@ -474,6 +474,8 @@ wrongly executed as a task before:
   * A follow-up that only comments on work already done ("thanks, that looks right").
 TRUE also: "can we", "could we" or "lets" followed by a NAMED piece of work to get going or done ("can we get the first product video
 moving?", "lets get the store release going"). That asks for the work to be started, even though it ends in a question mark.
+TRUE also: a message that OPENS with a command verb ("start an experiment on this quest: does X improve Y?", "add a goal ...", "create a habit ...")
+is an order even when the thing it names is itself phrased as a question; the question is the content to set up, not a request to be told.
 When you are torn, answer false. A missed directive costs the user one more sentence ("go ahead");
 a wrong one opens a task nobody asked for and reports work that was never wanted.
 
