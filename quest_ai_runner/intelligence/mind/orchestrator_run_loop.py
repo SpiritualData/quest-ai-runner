@@ -174,6 +174,7 @@ class RunLoopMixin:
                 if hasattr(self.provider, "tokens_in"):
                     res.tokens_in = self.provider.tokens_in
                     res.tokens_out = self.provider.tokens_out
+                    res.llm_calls = max(0, int(getattr(self.provider, "call_count", 0) or 0) - int(getattr(rs, "llm_calls0", 0) or 0))
             except Exception:  # noqa: BLE001
                 pass
             if rs.trace is not None:

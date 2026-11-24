@@ -106,6 +106,36 @@ def end_facts(results: Iterable[Any]) -> Dict[str, Any]:
     decision = stop_decision_of(out.get("end_reason", ""), left)
     if decision:
         out["stop_decision"] = decision
+    usage = usage_facts(None, done)
+    if usage:
+        out["usage"] = usage
+    return out
+
+
+CLAUDE_USAGE_FIELDS = (("input", "input_tokens"), ("cache_write", "cache_creation_input_tokens"), ("cache_read", "cache_read_input_tokens"), ("output", "output_tokens"))
+
+
+def count(value: Any) -> int:
+    """A token figure: a whole number not below zero; anything else is 0."""
+    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0 else 0
+
+
+def usage_facts(turn: Any, results: Iterable[Any]) -> Optional[Dict[str, Any]]:
+    """The tokens of a finished run in two kinds, for ``result_data['usage']``: ``claude_code`` (the deep Claude Code session(s): ``input``, ``cache_write``,
+    ``cache_read``, ``output``, ``calls``, put on the results by ``RunFacts.finish``) and ``qar_llm`` (the runner's own planner, answer and check calls: ``input``,
+    ``output``, ``calls``, from the turn result), with ``total_tokens`` their sum, the cache read counted as reported. A kind the run does not know is left out;
+    None when neither is known."""
+    out: Dict[str, Any] = {}
+    parts = [getattr(r, "claude_code_usage", None) for r in results or [] if r is not None]
+    parts = [p for p in parts if isinstance(p, dict)]
+    if parts:
+        out["claude_code"] = {key: sum(count(p.get(key)) for p in parts) for key in ("input", "cache_write", "cache_read", "output", "calls")}
+    own = {"input": count(getattr(turn, "tokens_in", 0)), "output": count(getattr(turn, "tokens_out", 0)), "calls": count(getattr(turn, "llm_calls", 0))}
+    if any(own.values()):
+        out["qar_llm"] = own
+    if not out:
+        return None
+    out["total_tokens"] = sum(out.get("claude_code", {}).get(k, 0) for k in ("input", "cache_write", "cache_read", "output")) + own["input"] + own["output"]
     return out
 
 
@@ -162,11 +192,13 @@ class RunFacts:
         self.dirty_structure = False
         self.dirty_spend = False
         self.cost_sent_raw = False
+        self.messages: Dict[str, Dict[str, int]] = {}      # Claude Code message id -> its largest figures seen: a streamed message repeats on every line, so it counts once
         self.lock = threading.RLock()
 
     # --- reading the run -----------------------------------------------------------------------------------------------------------
     def take(self, event: Any) -> None:
         """Read one progress event of the run. Never raises: a fact that cannot be read is left out, the run goes on."""
+        self.note_usage(event)
         try:
             items = progress_events(event, stream=self.stream)
         except Exception:  # noqa: BLE001
@@ -179,6 +211,33 @@ class RunFacts:
             for item in items:
                 self.apply(item)
             self.flush(force=False)
+
+    def note_usage(self, event: Any) -> None:
+        """Keep the token figures of a Claude Code assistant message from a raw stream line (the main session's and every helper's), once per message id."""
+        try:
+            raw = getattr(event, "data", None)
+            if getattr(event, "type", "") != "stream" or not isinstance(raw, dict) or raw.get("type") != "assistant":
+                return
+            message = raw.get("message")
+            usage = message.get("usage") if isinstance(message, dict) else None
+            ident = str(message.get("id") or "") if isinstance(message, dict) else ""
+            if not ident or not isinstance(usage, dict):
+                return
+            with self.lock:
+                seen = self.messages.setdefault(ident, {})
+                for key, field in CLAUDE_USAGE_FIELDS:
+                    seen[key] = max(seen.get(key, 0), count(usage.get(field)))
+        except Exception:  # noqa: BLE001 -- counting never stops the run
+            pass
+
+    def claude_usage(self) -> Optional[Dict[str, int]]:
+        """What the Claude Code session(s) of this run used so far, or None when no message was seen."""
+        with self.lock:
+            if not self.messages:
+                return None
+            out = {key: sum(m.get(key, 0) for m in self.messages.values()) for key, _ in CLAUDE_USAGE_FIELDS}
+            out["calls"] = len(self.messages)
+            return out
 
     def apply(self, item: Any) -> None:
         self.events.append(item)
@@ -263,7 +322,8 @@ class RunFacts:
         except Exception:  # noqa: BLE001 -- the account of a run never stops the run
             pass
 
-    def send_spend(self, cost: Dict[str, Any], now: float, spend: Optional[float] = None, elapsed: Optional[float] = None) -> None:
+    def send_spend(self, cost: Dict[str, Any], now: float, spend: Optional[float] = None, elapsed: Optional[float] = None,
+                   usage: Optional[Dict[str, Any]] = None) -> None:
         usd = amount(cost.get("usd")) if spend is None else spend
         if usd is None:
             return
@@ -276,6 +336,8 @@ class RunFacts:
             if not self.cost_sent_raw:
                 self.emit("tokens", "", tick)
         data: Dict[str, Any] = {"spend_usd": usd, "elapsed_seconds": round(elapsed if elapsed is not None else now - self.started, 1), **self.ceilings}
+        if usage:
+            data["usage"] = usage
         text = json.dumps({k: v for k, v in data.items() if k != "elapsed_seconds"}, sort_keys=True)
         if text != self.last_spend:
             self.last_spend = text
@@ -295,10 +357,16 @@ class RunFacts:
                         except Exception:  # noqa: BLE001
                             pass
             self.flush(force=True)
+            used = self.claude_usage()
+            if used and done:
+                try:
+                    done[-1].claude_code_usage = used       # the run's whole Claude Code usage rides on one result so ``end_facts`` counts it once
+                except Exception:  # noqa: BLE001
+                    pass
             facts = end_facts(done)
             try:
                 if "spend_usd" in facts:
-                    self.send_spend({}, self.clock(), spend=facts["spend_usd"], elapsed=facts.get("elapsed_seconds"))
+                    self.send_spend({}, self.clock(), spend=facts["spend_usd"], elapsed=facts.get("elapsed_seconds"), usage=facts.get("usage"))
                 if "stop_decision" in facts:
                     self.emit("stop_decision", "", dict(facts["stop_decision"]))
             except Exception:  # noqa: BLE001
@@ -312,6 +380,9 @@ def end_report_data(result: Any) -> Dict[str, Any]:
     A turn with no deep run that ran out of attempts (``turn_outcome``: stopped, ``attempt_cap``) has its own end facts: ``end_reason`` ``attempt_cap`` and ``left``,
     the answer verdict's account of what the goal still needs, so the screen says what is left and not only that the tries ran out."""
     facts = end_facts(getattr(result, "deep_results", None) or [])
+    usage = usage_facts(result, getattr(result, "deep_results", None) or [])      # the turn's own calls join what the deep results carry
+    if usage:
+        facts = {**facts, "usage": usage}
     if facts or getattr(result, "deep_results", None):
         return facts
     from quest_ai_runner.intelligence.mind.response_writer.orchestrator_turn_messages import turn_outcome

@@ -251,6 +251,7 @@ class RunBeginMixin:
             if hasattr(self.provider, "tokens_in"):
                 self.provider.tokens_in = 0
                 self.provider.tokens_out = 0
+            rs.llm_calls0 = int(getattr(self.provider, "call_count", 0) or 0)      # the call counter is not reset: the turn's calls are the difference
         except Exception:  # noqa: BLE001
             pass
 

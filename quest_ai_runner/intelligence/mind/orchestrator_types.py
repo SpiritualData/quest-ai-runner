@@ -578,6 +578,7 @@ class OrchestratorResult:
     # from provider.tokens_in / tokens_out when the provider supports tracking.
     tokens_in: int = 0
     tokens_out: int = 0
+    llm_calls: int = 0      # the provider's model calls this turn (its own, apart from a deep worker's), for the task's reported token usage
     # Why the loop exited. One of: "verified" | "max_turns" | "escalated_deep" | "read_budget" |
     # "unverified" | "deferred" (a queued deployment confirmed a deferred hand-off this turn; the
     # external runner verifies the real outcome out-of-band) |
