@@ -422,3 +422,9 @@ def test_buying_paying_or_ordering_for_the_person_is_declined_in_the_ordered_rub
 def test_an_empty_read_of_the_persons_own_records_is_the_answer_not_a_hand_off():
     from quest_ai_runner.intelligence.mind.planner.planner_prompt import PLANNER_PROMPT
     assert "that IS the answer" in PLANNER_PROMPT and "never hand it off to look again" in PLANNER_PROMPT
+
+
+def test_planner_prompt_keeps_definition_questions_out_of_the_structure_moves():
+    from quest_ai_runner.intelligence.mind.planner import planner_prompt as pp
+    text = pp.PLANNER_PROMPT if hasattr(pp, "PLANNER_PROMPT") else "".join(str(v) for v in vars(pp).values() if isinstance(v, str))
+    assert "what a word means or how two terms differ" in text
