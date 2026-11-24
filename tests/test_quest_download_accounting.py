@@ -61,8 +61,8 @@ def test_a_list_read_for_results_asks_the_server_to_leave_out_only_the_progress_
     got = c.list_tasks(goal_id="quest_1", without_progress=True)
     assert seen[0]["without_progress"] == "true" and "slim" not in seen[0]
     assert got == [{"id": "a", "result": "what the run produced"}]
-    c.list_tasks(goal_id="quest_2")
-    assert "without_progress" not in seen[1]                           # opt-in: a caller that reads the log still gets it
+    c.list_tasks(goal_id="quest_2", without_progress=False)
+    assert "without_progress" not in seen[1]                           # a caller that reads the log asks for it by name
 
 
 def test_the_autopilot_pass_reads_prior_tasks_without_their_progress_logs():
@@ -98,11 +98,13 @@ def test_an_unchanged_task_list_is_answered_from_the_kept_copy():
 def test_a_server_without_etags_is_used_as_before():
     from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestClient
 
-    c = QuestClient("http://x", "qsk_test", team_id="team_1")
+    c = QuestClient("http://no-etags", "qsk_test", team_id="team_1")
     c._request = lambda method, path, **kw: {"tasks": [{"task_id": "a"}]}
     assert [t["task_id"] for t in c.discover_due(team_id="team_1")] == ["a"]
     assert [t["task_id"] for t in c.discover_due(team_id="team_1")] == ["a"]
-    assert c.__dict__.get("task_list_cache") == {}
+    from quest_ai_runner.body.internal_context.quest.client.quest_client_read_cache import READ_CACHE
+    scope = READ_CACHE.scope_of(c)
+    assert not [key for key in READ_CACHE.etags if key[0] == scope]      # no etag in the reply, so none is kept
 
 
 def test_the_run_history_read_leaves_out_progress_logs():
@@ -141,3 +143,24 @@ def test_recurring_adoption_and_handover_reads_are_slim():
     Probe()._due_recurring_tasks("quest_1")
     assert seen.get("slim") is True
     assert "slim=True" in inspect.getsource(w).split("client.list_tasks(goal_id=quest_id")[1].split("\n")[0]
+
+
+def test_a_quest_task_list_leaves_out_progress_logs_unless_a_caller_asks_for_them():
+    """The default read of one quest's tasks carried every progress log: 52.1 MB in one reply (2026-11-24, production access log)."""
+    from quest_ai_runner.body.internal_context.quest.client.quest_client_tasks import TasksMixin
+
+    class Client(TasksMixin):
+        team_id = None
+
+        def __init__(self):
+            self.asked = []
+
+        def get_task_list(self, params):
+            self.asked.append(dict(params))
+            return [{"id": "t1", "text": "marker", "result": "r", "progress": [{"text": "line"}]}]
+
+    client = Client()
+    assert client.list_tasks_or_none(goal_id="q1") == [{"id": "t1", "text": "marker", "result": "r"}]
+    assert client.list_tasks(goal_id="q1") == [{"id": "t1", "text": "marker", "result": "r"}]
+    assert [p.get("without_progress") for p in client.asked] == ["true", "true"]
+    assert client.list_tasks(goal_id="q1", without_progress=False)[0]["progress"] and "without_progress" not in client.asked[-1]

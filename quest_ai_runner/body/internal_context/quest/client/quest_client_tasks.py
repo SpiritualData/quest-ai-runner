@@ -894,7 +894,7 @@ class TasksMixin:
                   task_kind: Optional[str] = None,
                   created_after: Optional[str] = None,
                   slim: bool = False,
-                  without_progress: bool = False) -> List[Dict[str, Any]]:
+                  without_progress: bool = True) -> List[Dict[str, Any]]:
         """GET /api/assistant-tasks, for Autopilot's budget/backpressure math.
 
         SERVER-SIDE filters (the only ones the Quest API's list route actually implements):
@@ -919,6 +919,9 @@ class TasksMixin:
         list, only in the per-quest one. So a "does this quest already have X" question MUST pass
         ``goal_id``; the team-wide list can only answer it for quests the calling account owns.
 
+        Progress logs are left out unless ``without_progress=False``: one quest's list with them was 52 MB in one reply (2026-11-24).
+        ``slim=True`` leaves out the result text as well.
+
         Returns ``[]`` on any failure. Never raises. When the caller has to tell a real empty
         list from a failed read (anything that CREATES on an empty answer), call
         ``list_tasks_or_none`` instead.
@@ -934,7 +937,7 @@ class TasksMixin:
                            task_kind: Optional[str] = None,
                            created_after: Optional[str] = None,
                            slim: bool = False,
-                           without_progress: bool = False) -> Optional[List[Dict[str, Any]]]:
+                           without_progress: bool = True) -> Optional[List[Dict[str, Any]]]:
         """``list_tasks``, but a FAILED read is reported instead of swallowed.
 
         Same filters and the same owner-scoping contract as ``list_tasks`` (read its docstring
