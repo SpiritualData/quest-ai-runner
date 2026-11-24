@@ -12653,3 +12653,4 @@ date,component,impl,cases,passed,dev,heldout,model_calls,tokens_in,tokens_out,co
 2026-11-24,write_through_mcp,allowlist_writer,15,15,15/15,0/0,0,0,0,0.0,0.0,afc2796a,5f3dda75,none,"list 4/4, write 11/11",,,
 2026-11-24,keep_secrets_out,live_scanner,35,35,35/35,0/0,0,0,0,0.0,8.1,afc2796a,17d7b83a,none,"cli 6/6, repo 6/6, text 23/23 | reused 1 case(s) already run for this implementation version",,,
 2026-11-24,hub_of_hubs,registry_scan,278,257,257/278,0/0,0,0,0,0.0,0.0,afc2796a,bc61fb2a,none,"checks passed 257/278 (by_config 3/11, core_clean 12/12, fake_hub 7/11, fresh 74/74, no_reinvented 73/74, registered 74/74, seam 7/11, selectable 7/11); registry reading (t... | forced past unsolved failures: rerecord at current commit | reused 278 case(s) already run for this implementation version",,,
+2026-11-24,conversation_recall,session_files,1,0,0/1,0/0,0,0,0,0.0,0.0,e8faf555,91ee126a,none,"right conversations recalled 0/1, cross-user leaks 0",only:CNV-010,,
