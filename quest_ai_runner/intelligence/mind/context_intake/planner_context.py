@@ -30,7 +30,9 @@ PLANNER_TOOLS_HEAD = (
     "--- DIRECT TOOLS: a fifth action, \"tool\" ---\n"
     "Besides read/answer/deep/confirm/clarify you may choose action=\"tool\" with "
     "\"tool_calls\". To find a tool that is not listed below, use a read spec "
-    "{\"tools\": \"<what you need>\"}.\n")
+    "{\"tools\": \"<what you need>\"}. A question about what the person has of a kind a listed "
+    "tool reads (their experiments, goals, habits) is answered by calling that tool, not by a "
+    "read of sources and operations.\n")
 
 # The planner's LIVE WEB block (``Orchestrator.web`` is wired, ``core/adapters_retrieval.WebResearch``).
 # Rendered via ``.format(describe=...)`` with the adapter's own ``describe()`` string. Placed
