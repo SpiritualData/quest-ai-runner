@@ -5,6 +5,7 @@ calls come from the turn result, and the total adds every kind as reported (cach
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -72,8 +73,8 @@ def test_a_turn_with_only_its_own_calls_and_a_turn_with_nothing_known():
 
 
 def test_the_parser_matches_the_sum_of_unique_message_ids_on_a_real_session():
-    sessions = sorted(Path("/home/joshua/hq/stories/spiritual_data/product/.claude/projects/-home-joshua-hq-stories-spiritual-data-quest-user-retention").glob("*.jsonl"),
-                      key=lambda p: p.stat().st_size)
+    folder = os.environ.get("QAR_REAL_SESSION_DIR")      # a folder of real agent session files, kept outside the repository
+    sessions = sorted(Path(folder).glob("*.jsonl"), key=lambda p: p.stat().st_size) if folder else []
     def assistants(path):
         return [json.loads(text) for text in path.read_text().splitlines() if '"type":"assistant"' in text.replace(" ", "")]
 
