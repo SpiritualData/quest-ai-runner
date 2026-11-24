@@ -114,7 +114,16 @@ def _as_hypotheses(value: Any) -> List[Dict[str, Any]]:
     ``hypothesis`` habit) becomes one overall-question expectation."""
     if isinstance(value, str):
         value = [{"statement": value}] if value.strip() else []
-    return [h if isinstance(h, dict) else {"statement": str(h)} for h in value or []]
+    out: List[Dict[str, Any]] = []
+    for h in value or []:
+        if isinstance(h, dict) and not str(h.get("statement") or "").strip():
+            # a model often names the sentence text, hypothesis or expectation: that is the statement
+            alt = next((str(h[k]).strip() for k in ("text", "hypothesis", "expectation", "description")
+                        if str(h.get(k) or "").strip()), "")
+            h = {**{k: v for k, v in h.items() if k not in ("text", "hypothesis", "expectation", "description")},
+                 "statement": alt} if alt else h
+        out.append(h if isinstance(h, dict) else {"statement": str(h)})
+    return [h for h in out if str(h.get("statement") or "").strip()]
 
 
 _EXPERIMENT_HYPOTHESES_PARAM = {

@@ -405,3 +405,11 @@ def test_update_tool_refuses_to_reopen_what_a_running_experiment_holds_fixed_and
     assert noted.ok and calls == [("note", "Maybe write at night")]
     chosen = spec.handler({**base, "held_fixed": ["Write at night"], "person_chose_to_reopen": True}, ctx)
     assert chosen.ok and calls[-1] == ("update", {"held_fixed": ["Write at night"]})
+
+
+def test_hypotheses_accept_the_sentence_under_text_or_hypothesis_key():
+    from quest_ai_runner.body.hands.quest_operations.tools_quest_experiments import _as_hypotheses
+    assert _as_hypotheses([{"text": "Oats help"}]) == [{"statement": "Oats help"}]
+    assert _as_hypotheses([{"hypothesis": "Oats help", "sub_question_id": "s1"}]) == [{"statement": "Oats help", "sub_question_id": "s1"}]
+    assert _as_hypotheses("Oats help") == [{"statement": "Oats help"}]
+    assert _as_hypotheses([{"statement": "A"}, {"text": ""}]) == [{"statement": "A"}]
