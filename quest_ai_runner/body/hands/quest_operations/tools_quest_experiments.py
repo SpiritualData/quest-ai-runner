@@ -260,7 +260,7 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
         if not quest_id or not question:
             return ToolResult(ok=False, text="An experiment needs a quest and a question; "
                                              "nothing was created.")
-        if not args.get("user_asked_for_this_field"):
+        if args.get("user_asked_for_this_field") is False:       # left out means the order gate decides (as the goal tool); an explicit false is only an offer
             return ToolResult(ok=False, text=(f"Not created: the user did not ask for the "
                                               f"experiment {question!r}. Suggest it in your "
                                               f"reply instead."))

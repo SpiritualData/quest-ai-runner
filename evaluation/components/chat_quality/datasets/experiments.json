@@ -15,8 +15,8 @@
    "message": "Start an experiment on this quest: does stretching for ten minutes before bed improve my sleep?",
    "mutates": true,
    "precheck": {
-    "code_contains_any": [
-     "create_research_question"
+    "tools_called": [
+     "create_quest_experiment"
     ],
     "code_not_contains": [
      "update_quest_fields",
@@ -43,8 +43,8 @@
    "message": "Set up an experiment for this quest: does eating oats before long runs help my pace? I expect it will, and I want to run it from 1 Nov to 30 Nov.",
    "mutates": true,
    "precheck": {
-    "code_contains_any": [
-     "create_research_question"
+    "tools_called": [
+     "create_quest_experiment"
     ],
     "code_not_contains": [
      "update_quest_fields",
@@ -62,7 +62,7 @@
    "rubric": [
     "Lists the stretching and sleep experiment created in the previous turn",
     "States its status (open or experimenting) without contradicting what was created",
-    "Does not claim experiments that were never created"
+    "Does not claim experiments that were never created (the quest's own default question is a real record and may also be listed)"
    ],
    "evidence_notes": " Code assertions span all turns, so the rubric on the final turn carries the weight.",
    "messages": [

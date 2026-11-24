@@ -299,10 +299,11 @@ def test_find_experiments_reports_a_failed_read_not_an_empty_list():
     assert not spec.handler({"quest_id": "q1"}, ToolContext()).ok
 
 
-def test_create_experiment_needs_the_users_ask_and_passes_only_given_fields():
+def test_create_experiment_refuses_an_explicit_offer_and_passes_only_given_fields():
     client = FakeQuestClient()
     spec = create_quest_experiment_spec({}, client_factory=factory(client))
-    assert not spec.handler({"quest_id": "q1", "question": "Does oat milk help?"}, ToolContext()).ok
+    # an explicit false is only an offer; a flag left out defers to the turn's order gate (as the goal tool does)
+    assert not spec.handler({"quest_id": "q1", "question": "Does oat milk help?", "user_asked_for_this_field": False}, ToolContext()).ok
     assert client.calls == []
     result = spec.handler({"quest_id": "q1", "question": "Does oat milk help?", "hypothesis": "",
                            "linked_goal_ids": ["g1"], "user_asked_for_this_field": True},

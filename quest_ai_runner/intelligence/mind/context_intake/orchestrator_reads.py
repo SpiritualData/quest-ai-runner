@@ -34,7 +34,9 @@ ACTING_TOOL_ARGS_CHARS = 4000
 # What the planner does after naming a tool that does not exist. The slip is usually a read of the person's own records (collection entries, notes, goals) named
 # as a tool; nothing was read, so the re-plan reads it through the capability menu instead of answering as if the records were empty.
 NOT_A_TOOL_NEXT = ("Nothing was read. If you meant the person's own records (collection entries, notes, goals, tasks), read them as an operation of the "
-                   "CAPABILITY MENU (list_operations, then the operation) in the next step; never answer that nothing is recorded from this.")
+                   "CAPABILITY MENU (list_operations, then the operation) in the next step; never answer that nothing is recorded from this. If you meant an operation that "
+                   "creates or changes the person's records (an experiment, a goal), it is not a tool step either: plan it as deep with deep_target \"quest_data\" so the "
+                   "operation is called, and never stand in a note for the record that was asked for.")
 
 class ReadsMixin:
     """Executing the planner's read specs and direct tool calls."""

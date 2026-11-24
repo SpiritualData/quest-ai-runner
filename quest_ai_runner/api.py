@@ -114,6 +114,7 @@ from quest_ai_runner.world.tools.tools_status import ToolStatus
 # The milestone flow's tools over a host's own Quest client, and the shapes a host's client and metric reader return
 from quest_ai_runner.body.hands.quest_operations.tools_milestone_flow import milestone_flow_tools
 # The workflow tools over a host's own Quest client (list first; create reports an existing workflow as already there)
+from quest_ai_runner.body.hands.quest_operations.tools_quest_experiments import create_quest_experiment_spec, find_quest_experiments_spec
 from quest_ai_runner.body.hands.quest_operations.tools_quest_ops import add_quest_note_spec, create_quest_workflow_spec, find_quest_spec, list_quest_workflows_spec
 # The investigation tools over a host's own Quest client (look into a question through the hub's Learning solution and record it on the quest)
 from quest_ai_runner.body.hands.quest_operations.tools_quest_investigations import (
@@ -244,6 +245,8 @@ __all__ = [
     "checked_reading",
     "milestone_flow_tools",
     "add_quest_note_spec",
+    "create_quest_experiment_spec",
+    "find_quest_experiments_spec",
     "create_quest_workflow_spec",
     "find_quest_spec",
     "placeholder_reason",
