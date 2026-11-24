@@ -428,3 +428,9 @@ def test_planner_prompt_keeps_definition_questions_out_of_the_structure_moves():
     from quest_ai_runner.intelligence.mind.planner import planner_prompt as pp
     text = pp.PLANNER_PROMPT if hasattr(pp, "PLANNER_PROMPT") else "".join(str(v) for v in vars(pp).values() if isinstance(v, str))
     assert "what a word means or how two terms differ" in text
+
+
+def test_planner_prompt_advice_shape_excludes_definition_questions():
+    from quest_ai_runner.intelligence.mind.planner import planner_prompt as pp
+    text = "".join(str(v) for v in vars(pp).values() if isinstance(v, str))
+    assert "never a question about what a word means or how two terms differ" in text
