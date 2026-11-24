@@ -678,6 +678,11 @@ class TaskExecutor(ContextViewMixin, FollowUpMixin, PausesMixin, ReportingMixin)
             return self._pause_for_provider_outage(
                 task, task_id, outage, conv_id=conv_id, card_id=card_id,
                 session_id=terminal_session_id(result) or resume_session_id)
+        login = self._login_behind(result)
+        if login is not None:
+            return self._pause_for_login(
+                task, task_id, login, conv_id=conv_id, card_id=card_id,
+                session_id=terminal_session_id(result) or resume_session_id)
         if self._context_bundle is not None:
             self._safe(self._context_bundle.mark_seen)
         self.measure_milestone_work(text, result)

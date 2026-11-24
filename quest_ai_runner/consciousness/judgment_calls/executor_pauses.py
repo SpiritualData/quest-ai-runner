@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from hubofhubs.api import outage as provider_outage
+from hubofhubs.api import AuthenticationError, authentication_failed, outage as provider_outage
 
 from quest_ai_runner.intelligence.mind.orchestrator import OrchestratorResult
 from quest_ai_runner.world.model_plumbing.model_tier_chooser import usage_limit
@@ -267,6 +267,24 @@ class PausesMixin:
             if any(d.decision_id for d in deep):
                 return None
             return recent
+        return None
+
+    @staticmethod
+    def _login_behind(result: OrchestratorResult) -> Optional[AuthenticationError]:
+        """The invalid Claude login that kept the worker from starting, or None.
+
+        A worker that never started reports it in ``DeepResult.launch_failed`` with the CLI's own "Failed to authenticate"
+        message as its cause; it raises nothing, so the exception path never saw it and 14 queued tasks were marked failed
+        in one hour (2026-11-24). It is a wait for a sign-in, not a failure of the work.
+        """
+        if getattr(result, "kind", None) != "deep":
+            return None
+        from quest_ai_runner.intelligence.mind.delegation.launch_failure import cause
+        for d in getattr(result, "deep_results", None) or []:
+            if getattr(d, "launch_failed", False) and not getattr(d, "met", False):
+                why = cause(getattr(d, "error", None), getattr(d, "launch_problem", "") or "")
+                if authentication_failed(None, why):
+                    return AuthenticationError(why)
         return None
 
     def _pause_for_login(self, task: Dict[str, Any], task_id: str, failure: BaseException, *,

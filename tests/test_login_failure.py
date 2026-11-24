@@ -132,3 +132,21 @@ def test_a_turn_whose_planner_hits_an_invalid_login_ends_with_the_typed_error_af
     with pytest.raises(AuthenticationError):
         orch.run("What is the price?")
     assert provider.plan_calls == 1             # one planner attempt: no re-plan, no fallback after the typed error
+
+
+class ReturnsUnstartedWorker:
+    """The run comes back (nothing raised) with a deep worker the CLI refused to start because the login lapsed."""
+
+    def run(self, *args, **kwargs):
+        from types import SimpleNamespace
+        deep = SimpleNamespace(met=False, launch_failed=True, launch_problem="", decision_id=None, usage_limited=False, output="",
+                               error="The deep worker could not start: Failed to authenticate: OAuth session expired and could not be refreshed")
+        return SimpleNamespace(kind="deep", text="", deep_results=[deep], session_id=None)
+
+
+def test_a_worker_that_could_not_start_on_an_invalid_login_is_held_not_failed():
+    from quest_ai_runner.consciousness.request_intake.executor import TaskExecutor
+    client = RecordingClient()
+    outcome = TaskExecutor(client, ReturnsUnstartedWorker()).execute({"task_id": "atask_9", "text": "improve the retention flow"})
+    assert outcome.status == "waiting"
+    assert client.named("requeue_for_provider_outage") and not client.named("report_failed")
