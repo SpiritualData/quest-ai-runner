@@ -340,7 +340,7 @@ def test_update_experiment_sends_only_changed_keys_and_validates_status():
     client = FakeQuestClient()
     spec = update_quest_experiment_spec({}, client_factory=factory(client))
     base = {"quest_id": "q1", "research_question_id": "rq_sleep"}
-    assert not spec.handler({**base, "status": "concluded"}, ToolContext()).ok  # no ask
+    assert not spec.handler({**base, "status": "concluded", "user_asked_for_this_field": False}, ToolContext()).ok  # an explicit false is only an offer
     assert not spec.handler({**base, "user_asked_for_this_field": True}, ToolContext()).ok  # no change
     assert not spec.handler({**base, "status": "done", "user_asked_for_this_field": True},
                             ToolContext()).ok

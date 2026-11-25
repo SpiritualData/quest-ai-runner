@@ -375,7 +375,7 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
             return ToolResult(ok=False, text="Editing an experiment needs a quest and the "
                                              "experiment's id (find_quest_experiments); nothing "
                                              "was changed.")
-        if not args.get("user_asked_for_this_field"):
+        if args.get("user_asked_for_this_field") is False:       # left out means the order gate decides (as the create tool); an explicit false is only an offer
             return ToolResult(ok=False, text=(f"Not changed: the user did not ask to change "
                                               f"experiment {rid}. Suggest it in your reply "
                                               f"instead."))
