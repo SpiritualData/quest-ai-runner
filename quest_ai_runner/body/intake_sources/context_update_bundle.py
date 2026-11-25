@@ -296,14 +296,18 @@ class ContextUpdates:
                     log.warning("feedback ledger: could not record %s (%s)", u.item_id, e)
         self.relay_admitted()
 
-    def settle_answered_asks(self, task_id: Optional[str] = None) -> List[str]:
-        """After a run that was handed answered-but-unacted asks finished ``done``, tell Quest they
-        were acted on so they leave the person's "waiting for your AI" queue.
+    def settle_answered_asks(self, task_id: Optional[str] = None, run_text: str = "") -> List[str]:
+        """After a run finished ``done``, tell Quest which answered asks it acted on so they leave
+        the person's "waiting for your AI" queue. Exact by id, idempotent, never raises.
 
-        Only the ones this bundle offered as owed action (``kind`` "answered ask, not yet acted
-        on"); an approved ask with a prepared action is offered as ``needs_response=False`` and is
-        left for the person's button. Exact by id, idempotent, never raises. Returns the ids sent.
+        Cleared: (1) the asks this bundle offered as owed action ("answered ask, not yet acted on",
+        ``needs_response``); (2) pending asks on this quest that ``run_text`` (the run's output)
+        names by id, which covers asks the 20-update cap dropped or another session handled; (3) ids
+        the run listed on a "NO ACTION NEEDED:" line; (4) parked approvals Quest has now executed.
+        A failed write is logged and its ids are kept in ``ask_settling.UNSETTLED`` (process-wide) for the next settle call.
+        Returns the ids sent.
         """
+        from quest_ai_runner.body.intake_sources import ask_settling as _a
         client = self.relay_client
         mark = getattr(client, "mark_decisions_acted", None)
         if not callable(mark):
@@ -311,13 +315,27 @@ class ContextUpdates:
         ids = [u.item_id for u in self.updates
                if u.source == "decisions" and u.kind == "answered ask, not yet acted on"
                and u.needs_response and u.item_id]
+        ids += [u.item_id for u in self.updates
+                if u.source == "decisions" and u.item_id and _a.is_executed_parked(u.raw or {})]
+        named = _a.ids_named_in(run_text)
+        pending = _a.pending_ids(client, self.card_id or "") if (named or _a.UNSETTLED or ids) else {}
+        ids += [i for i in named if i in pending]
+        ids += [i for i, row in pending.items() if _a.is_executed_parked(row)]
+        ids += [i for i in _a.ids_marked_no_action(run_text) if i in pending or i in named]
+        ids = list(dict.fromkeys(ids + sorted(_a.UNSETTLED)))
         if not ids:
             return []
         try:
-            mark(ids, task_id)
-        except Exception as e:  # noqa: BLE001 -- the next run offers them again
-            log.warning("could not mark %d answered ask(s) acted on (%s)", len(ids), e)
+            res = mark(ids, task_id)
+            failed = _a.mark_failed(res)
+            reason = getattr(res, "detail", "") if failed else ""
+        except Exception as e:  # noqa: BLE001 -- retried on the next settle, and logged now
+            failed, reason = True, str(e)
+        if failed:
+            _a.UNSETTLED.update(ids)
+            log.warning("could not mark %d answered ask(s) acted on (%s); will retry on the next run", len(ids), reason)
             return []
+        _a.UNSETTLED.difference_update(ids)
         return ids
 
     def relay_admitted(self) -> None:

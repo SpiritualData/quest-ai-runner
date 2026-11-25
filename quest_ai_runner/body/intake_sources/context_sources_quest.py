@@ -490,7 +490,7 @@ class DecisionsSource(_BaseSource):
             respond = ("act on this answer in this run, together with any other answers waiting "
                        "on this quest; do not ask it again. It leaves the person's waiting queue "
                        "when this run finishes done; if it needs no action at all, say so in the "
-                       "result")
+                       "result on a line 'NO ACTION NEEDED: <ask id>'; name each ask id you acted on in the result")
         return ContextUpdate(
             source="decisions",
             kind="answered ask, not yet acted on",

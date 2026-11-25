@@ -195,6 +195,9 @@ def add_context_command(sub) -> None:
     ctx_p.add_argument("--answered-asks", action="store_true", dest="answered_asks",
                        help="list the quests with answered asks waiting for the AI and NO autopilot running (quest, count, oldest), "
                             "then exit; read-only, creates nothing (quest_id is not needed)")
+    ctx_p.add_argument("--reconcile", action="store_true",
+                       help="with --answered-asks: clear pending answered asks whose id a LATER done task result or quest note on the same "
+                            "quest names, and list the rest; creates no task, writes only the mark-acted on ids with that evidence")
     ctx_p.add_argument("--tracked", action="store_true",
                        help="list what has been asked for on this quest and where each one got "
                             "to (the feedback ledger), then exit")

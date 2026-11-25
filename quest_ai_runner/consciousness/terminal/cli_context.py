@@ -118,6 +118,18 @@ def _print_answered_asks_without_autopilot(config_path) -> int:
     return 0
 
 
+def _print_reconciled_asks(config_path) -> int:
+    from quest_ai_runner import load_client
+    from quest_ai_runner.body.intake_sources.ask_settling import reconcile_pending_asks
+    cleared, rest = reconcile_pending_asks(load_client(config_path))
+    print(f"Cleared {len(cleared)} answered ask(s) a later done task or quest note names by id.")
+    for did in cleared:
+        print(f"  cleared  {did}")
+    for row in rest:
+        print(f"  waiting  {row.get('decision_id')}  quest {row.get('quest_id') or '?'}  answered {str(row.get('resolved_at') or '')[:10] or 'undated'}")
+    return 0
+
+
 def _cmd_context(args, log) -> int:
     """Run the `context` subcommand; returns the process exit code."""
     import json as _json
@@ -127,6 +139,8 @@ def _cmd_context(args, log) -> int:
     from quest_ai_runner.body.intake_sources.context_updates import build_update_engine, collect_quest_context
 
     if getattr(args, "answered_asks", False):
+        if getattr(args, "reconcile", False):
+            return _print_reconciled_asks(getattr(args, "config", None))
         return _print_answered_asks_without_autopilot(getattr(args, "config", None))
     if not args.quest_id:
         log.error("context needs a quest id (or --answered-asks)")
