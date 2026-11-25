@@ -93,8 +93,11 @@ def _count_indexable_files(corpus: str) -> int:
     return total
 
 
-def answered_asks_without_autopilot_report(client) -> list:
-    """``(quest_id, count, oldest)`` for quests with answered asks waiting and no autopilot running. Read-only."""
+def answered_asks_without_autopilot_report(client, verified: list = None) -> list:
+    """``(quest_id, count, oldest)`` for quests with answered asks waiting and no autopilot running. Read-only.
+
+    Pass a list as ``verified`` to learn whether the read could be trusted (it gets one bool appended)."""
+    from quest_ai_runner.body.intake_sources.ask_settling import read_pending
     from quest_ai_runner.intelligence.proactivity.autopilot_pending import answered_asks_without_autopilot
     from quest_ai_runner.intelligence.proactivity.autopilot_units import units_of
 
@@ -103,12 +106,19 @@ def answered_asks_without_autopilot_report(client) -> list:
         cfg = {**dict(listed.get("shared") or {}), "autopilots": listed.get("autopilots") or []}
         return bool(units_of(cfg))
 
-    return answered_asks_without_autopilot(client.list_pending_answers(), runs)
+    found, ok = read_pending(client)
+    if verified is not None:
+        verified.append(ok)
+    return answered_asks_without_autopilot(list(found.values()), runs)
 
 
 def _print_answered_asks_without_autopilot(config_path) -> int:
     from quest_ai_runner import load_client
-    rows = answered_asks_without_autopilot_report(load_client(config_path))
+    verified: list = []
+    rows = answered_asks_without_autopilot_report(load_client(config_path), verified)
+    if not rows and not all(verified):
+        print("Could not verify: reading the quests' answered asks failed or found no quests, so nothing can be said about waiting asks.")
+        return 1
     if not rows:
         print("Every quest with answered asks waiting for the AI has an autopilot running (or none are waiting).")
         return 0
@@ -121,7 +131,12 @@ def _print_answered_asks_without_autopilot(config_path) -> int:
 def _print_reconciled_asks(config_path) -> int:
     from quest_ai_runner import load_client
     from quest_ai_runner.body.intake_sources.ask_settling import reconcile_pending_asks
-    cleared, rest = reconcile_pending_asks(load_client(config_path))
+    from quest_ai_runner.body.intake_sources.ask_settling import read_pending
+    client = load_client(config_path)
+    if not read_pending(client)[1]:
+        print("Could not verify: reading the quests' answered asks failed or found no quests; nothing was cleared.")
+        return 1
+    cleared, rest = reconcile_pending_asks(client)
     print(f"Cleared {len(cleared)} answered ask(s) a later done task or quest note names by id.")
     for did in cleared:
         print(f"  cleared  {did}")

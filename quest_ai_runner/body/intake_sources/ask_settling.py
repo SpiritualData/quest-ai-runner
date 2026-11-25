@@ -59,18 +59,66 @@ def _when(value: Any) -> Optional[datetime]:
     return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
+def _awaits_ai_action(row: Dict[str, Any]) -> bool:
+    from quest_ai_runner.body.intake_sources.context_sources_quest import _awaits_ai_action as rule
+    return rule(row)
+
+
+def read_pending(client: Any, quest_id: str = "") -> Tuple[Dict[str, Dict[str, Any]], bool]:
+    """``({decision_id: row}, verified)`` of the caller's pending answered asks. Read-only.
+
+    ``GET /api/teams/decisions`` only sees the key's own team, so the per-quest route
+    (``list_decisions_for_quest``, same rule as the context updates: answered, ``ai_action_status`` pending)
+    is the main source: one request for ``quest_id``, else one per quest of ``list_my_quests``.
+    ``list_pending_answers`` is merged in as an extra source. ``verified`` is False when no read could be
+    made or the quest list came back empty, so "nothing waiting" cannot be trusted.
+    """
+    found: Dict[str, Dict[str, Any]] = {}
+    verified = True
+
+    def add(rows: Any, quest: str = "", filtered: bool = False) -> None:
+        for r in rows or []:
+            if not isinstance(r, dict) or not r.get("decision_id") or not (filtered or _awaits_ai_action(r)):
+                continue
+            row = dict(r)
+            if quest and not row.get("quest_id"):
+                row["quest_id"] = quest
+            if quest_id and row.get("quest_id") and row["quest_id"] != quest_id:
+                continue
+            found.setdefault(str(row["decision_id"]), row)
+
+    per_quest = getattr(client, "list_decisions_for_quest", None)
+    if callable(per_quest):
+        quests = [quest_id] if quest_id else []
+        if not quest_id:
+            lister = getattr(client, "list_my_quests", None)
+            try:
+                mine = (lister() if callable(lister) else []) or []
+            except Exception as e:  # noqa: BLE001
+                log.warning("could not list quests for pending answered asks (%s)", e)
+                mine = []
+            quests = [str(q.get("quest_id") or q.get("id")) for q in mine if isinstance(q, dict) and (q.get("quest_id") or q.get("id"))]
+            verified = bool(quests)
+        for q in quests:
+            try:
+                add(per_quest(q), q)
+            except Exception as e:  # noqa: BLE001 -- a read failure only means fewer ids this time
+                log.warning("could not list decisions for %s (%s)", q, e)
+                verified = False
+    else:
+        verified = False
+    lister = getattr(client, "list_pending_answers", None)
+    if callable(lister):
+        try:
+            add(lister(), filtered=True)  # the server already filtered these
+        except Exception as e:  # noqa: BLE001
+            log.warning("could not list pending answered asks (%s)", e)
+    return found, verified
+
+
 def pending_ids(client: Any, quest_id: str = "") -> Dict[str, Dict[str, Any]]:
     """``{decision_id: row}`` of the caller's pending answered asks (one quest's when ``quest_id`` is given). Read-only."""
-    lister = getattr(client, "list_pending_answers", None)
-    if not callable(lister):
-        return {}
-    try:
-        rows = lister() or []
-    except Exception as e:  # noqa: BLE001 -- a read failure only means fewer ids this time
-        log.warning("could not list pending answered asks (%s)", e)
-        return {}
-    return {str(r.get("decision_id")): r for r in rows
-            if r.get("decision_id") and (not quest_id or not r.get("quest_id") or r.get("quest_id") == quest_id)}
+    return read_pending(client, quest_id)[0]
 
 
 def reconcile_pending_asks(client: Any, quest_ids: Optional[Sequence[str]] = None,

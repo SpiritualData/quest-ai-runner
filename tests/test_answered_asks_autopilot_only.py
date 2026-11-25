@@ -7,9 +7,9 @@ from quest_ai_runner.intelligence.proactivity.autopilot_pending import (
     answered_ask_work, answered_asks_by_quest, answered_asks_without_autopilot)
 from quest_ai_runner.intelligence.proactivity.poller_passes import PassesMixin
 
-ROWS = [{"quest_id": "q1", "resolved_at": "2026-11-02T00:00:00Z"},
-        {"quest_id": "q1", "resolved_at": "2026-11-01T00:00:00Z"},
-        {"quest_id": "q2", "resolved_at": "2026-11-05T00:00:00Z"}]
+ROWS = [{"decision_id": "d0", "quest_id": "q1", "resolved_at": "2026-11-02T00:00:00Z"},
+        {"decision_id": "d1", "quest_id": "q1", "resolved_at": "2026-11-01T00:00:00Z"},
+        {"decision_id": "d2", "quest_id": "q2", "resolved_at": "2026-11-05T00:00:00Z"}]
 
 
 class Client:

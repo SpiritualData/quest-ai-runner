@@ -69,3 +69,66 @@ def test_reconcile_clears_only_asks_a_later_result_or_note_names():
     assert len(c.marked) == 1
     c2 = Client(pending=c.pending, tasks=c.tasks, notes=c.notes)
     assert a.reconcile_pending_asks(c2, apply=False)[0] and c2.marked == []
+
+
+class PerQuestClient(Client):
+    """list_pending_answers sees nothing (other team); the per-quest route has the rows."""
+    ROWS = {"q1": [{"decision_id": "teamdec_a", "status": "resolved", "ai_action_status": "pending"},
+                   {"decision_id": "teamdec_done", "status": "resolved", "ai_action_status": "acted"},
+                   {"decision_id": "teamdec_open", "status": "open", "ai_action_status": "pending"}],
+            "q2": [{"decision_id": "teamdec_b", "quest_id": "q2", "status": "resolved", "ai_action_status": "pending"}]}
+
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.calls = []
+
+    def list_my_quests(self):
+        return [{"quest_id": "q1"}, {"quest_id": "q2"}]
+
+    def list_decisions_for_quest(self, q):
+        self.calls.append(q)
+        return self.ROWS.get(q, [])
+
+
+def test_pending_ids_read_the_per_quest_route_when_the_team_list_is_empty():
+    c = PerQuestClient()
+    assert sorted(a.pending_ids(c)) == ["teamdec_a", "teamdec_b"]
+    assert a.pending_ids(c)["teamdec_a"]["quest_id"] == "q1"
+    c.calls.clear()
+    assert list(a.pending_ids(c, "q2")) == ["teamdec_b"] and c.calls == ["q2"]
+
+
+def test_unverified_when_no_quests_come_back():
+    class Empty(PerQuestClient):
+        def list_my_quests(self):
+            return []
+    assert a.read_pending(Empty()) == ({}, False)
+
+
+def test_brief_section_and_cli_and_reconcile_see_per_quest_rows(capsys, monkeypatch):
+    from quest_ai_runner.intelligence.proactivity import quest_asks_brief
+    from quest_ai_runner.consciousness.terminal import cli_context
+    import quest_ai_runner
+    c = PerQuestClient()
+    assert "teamdec_a" in quest_asks_brief.answered_asks_section(c, "q1")
+    c.list_autopilots = lambda q: {}
+    assert cli_context.answered_asks_without_autopilot_report(c)[0][0] == "q1"
+    monkeypatch.setattr(quest_ai_runner, "load_client", lambda path: c)
+    assert cli_context._print_answered_asks_without_autopilot("x") == 0
+    assert "q1  1 waiting" in capsys.readouterr().out
+    c.notes = [{"created_at": "2026-12-01T00:00:00Z", "text": "did teamdec_a"}]
+    c.ROWS = {"q1": [dict(PerQuestClient.ROWS["q1"][0], resolved_at="2026-11-01T00:00:00Z")]}
+    cli_context._print_reconciled_asks("x")
+    out = capsys.readouterr().out
+    assert "cleared  teamdec_a" in out and c.marked == [["teamdec_a"]]
+
+
+def test_cli_does_not_claim_nothing_waiting_on_an_unverified_read(capsys, monkeypatch):
+    from quest_ai_runner.consciousness.terminal import cli_context
+    import quest_ai_runner
+    c = PerQuestClient()
+    c.list_my_quests = lambda: []
+    c.list_autopilots = lambda q: {}
+    monkeypatch.setattr(quest_ai_runner, "load_client", lambda path: c)
+    assert cli_context._print_answered_asks_without_autopilot("x") == 1
+    assert "none are waiting" not in capsys.readouterr().out
