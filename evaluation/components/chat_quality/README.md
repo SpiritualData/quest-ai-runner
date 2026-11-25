@@ -93,6 +93,8 @@ run only; without a model it uses the backend `.env`, i.e. dev's current config.
 comparison this way so the transport is identical, and copy `/tmp/qualeval/raw` aside between
 arms. `inprocess_usage.json` records calls and tokens per model actually served.
 
+Compare two models only on the same cases (at least 50, the datasets hold 359) and call one better only when the Wilson 95% intervals of their pass rates do not overlap, or the paired McNemar test is significant (`esoi/optimization/leaderboard/stats.py`: `wilson_interval`, `mcnemar_exact`); otherwise take the cheaper tier.
+
 The component's own live arm uses the same transport and counts what it spends. From the repo root:
 `QAR_EVAL_DEV_ENV_FILE=<dev lane env file> QAR_EVAL_DEV_HOST=<its host> QUAL_INPROCESS=1 QUAL_INPROCESS_MODEL=<cheapest tier id>
 esoi run chat_quality --impl dev_quest_chat --sample 3 --max-calls 120 --record`
