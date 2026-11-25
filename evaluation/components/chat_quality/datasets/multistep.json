@@ -395,7 +395,7 @@
   "expected_routing": "any",
   "rubric": [
    "Queues the plan-building task first, and its text says no running until the physio's 10 day ban ends (cycling and swimming only in that window) because of the left-knee injury",
-   "The plan task targets the 22 Nov race date, not 8 Nov",
+   "The plan task targets the {RACE_NEW} race date, not {RACE_OLD}",
    "The goal-conversion task is NOT queued in the same turn, because its input (the plan) does not exist yet; the reply says it will follow once the plan is done",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned",
    "If this surface cannot queue a background task, the reply says so plainly; a task it claims to have queued must be visible in the diff or a delegated frame"
@@ -425,7 +425,7 @@
     "entity": "task",
     "match": {},
     "field": "text",
-    "expected": "22 Nov",
+    "expected": "{RACE_NEW}",
     "hard": false
    },
    {
@@ -1032,8 +1032,8 @@
   "conversation_scope": "world",
   "expected_routing": "inline",
   "rubric": [
-   "Uses 22 Nov for the race (not 8 Nov) and 20 Nov for the in-laws' arrival",
-   "States that the in-laws arrive on Friday 20 Nov, two days before the Sunday 22 Nov race, so the visit overlaps race weekend and race eve (21 Nov)",
+   "Uses {RACE_NEW} for the race (not {RACE_OLD}) and 20 Nov for the in-laws' arrival",
+   "States that the in-laws arrive on Friday 20 Nov, two days before the Sunday {RACE_NEW} race, so the visit overlaps race weekend and race eve (21 Nov)",
    "Adds exactly one goal that deals with race-eve hosting, on one quest only (family fits best), not one goal per quest",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
   ],
@@ -1077,7 +1077,7 @@
    }
   ],
   "pivots_change_answer": true,
-  "evidence_notes": "Cross-quest: the correct quest is a judgement call, so the write is hard=False. Exactly one new goal in the diff. pivots_change_answer was set on 2026-10-07 (fifth pass): the case has no hard write assertion to prove the dates were retrieved (the goal assertion is only `exists`, hard=False), and RACE_MOVED genuinely flips the answer, since with the stale 8 Nov race date the 20 Nov visit creates no conflict at all and there is nothing to write a goal about. The gate needs only one of the two required pivots to come back changed_answer, so PLUMBER_WINDOW supplying the 20 Nov arrival as plain retrieval does not endanger a correct run."
+  "evidence_notes": "Cross-quest: the correct quest is a judgement call, so the write is hard=False. Exactly one new goal in the diff. pivots_change_answer was set on 2026-10-07 (fifth pass): the case has no hard write assertion to prove the dates were retrieved (the goal assertion is only `exists`, hard=False), and RACE_MOVED genuinely flips the answer, since with the stale {RACE_OLD} race date the 20 Nov visit creates no conflict at all and there is nothing to write a goal about. The gate needs only one of the two required pivots to come back changed_answer, so PLUMBER_WINDOW supplying the 20 Nov arrival as plain retrieval does not endanger a correct run."
  },
  {
   "id": "MS-020",
@@ -1278,13 +1278,13 @@
   "quest_key": "fitness",
   "messages": [
    "Queue a task to build my running plan for race week.",
-   "Scrap that. I forgot my knee and the race moved. Instead queue a cycling and swimming plan until 22 Nov."
+   "Scrap that. I forgot my knee and the race moved. Instead queue a cycling and swimming plan until {RACE_NEW}."
   ],
   "conversation_scope": "quest",
   "expected_routing": "any",
   "rubric": [
    "Second message overrides the first: the running-plan task is cancelled, or the reply says it is no longer wanted, and is not executed",
-   "A cycling and swimming plan task exists and uses 22 Nov",
+   "A cycling and swimming plan task exists and uses {RACE_NEW}",
    "The reply to message 2 knows about the task queued in message 1 (names it, says what happened to it)",
    "No running plan task survives as the final state",
    "If this surface cannot queue a background task, the reply says so plainly; a task it claims to have queued must be visible in the diff or a delegated frame"
@@ -1594,9 +1594,9 @@
   "expected_routing": "inline",
   "rubric": [
    "Turn 1 gives a taper length from search, or says plainly it could not search",
-   "Turn 2 computes the taper start from the 22 Nov race date, not 8 Nov, using the length from turn 1",
+   "Turn 2 computes the taper start from the {RACE_NEW} race date, not {RACE_OLD}, using the length from turn 1",
    "The goal added is a taper goal carrying that start date in its name, description or target_date",
-   "Turn 2 uses the taper length stated in turn 1; if turn 1 could not search, turn 2 states the length it assumes and labels it general guidance rather than a search result. The start date equals 22 Nov minus that length"
+   "Turn 2 uses the taper length stated in turn 1; if turn 1 could not search, turn 2 states the length it assumes and labels it general guidance rather than a search result. The start date equals {RACE_NEW} minus that length"
   ],
   "steps": [
    {
@@ -1629,7 +1629,7 @@
     "hard": true
    }
   ],
-  "evidence_notes": "Turn 2 must carry the search result forward. An 8 Nov based date fails RACE_MOVED. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it).",
+  "evidence_notes": "Turn 2 must carry the search result forward. An {RACE_OLD} based date fails RACE_MOVED. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is. Rubric audit 2026-10-07: create_goal stores target_date as the goal's scheduled_date and sets deadline to the END of that month by design, so a month-end deadline in the diff is not evidence that the requested day was lost; read the day from scheduled_date (and fail it only when scheduled_date, name and description all lack it).",
   "bonus_pivots": [
    "KNEE_INJURY"
   ],
@@ -2310,7 +2310,7 @@
   "auto_run": false,
   "rubric": [
    "The proposed current_state carries the 54:10 time trial (5:25 per km) and the left-knee injury with the 10 day run ban",
-   "The proposed time-trial goal is dated after the run ban ends (8 or more days after the ground truth's 'Today is' date) and before the 22 Nov race",
+   "The proposed time-trial goal is dated after the run ban ends (8 or more days after the ground truth's 'Today is' date) and before the {RACE_NEW} race",
    "Both changes are presented as awaiting approval, and the reply does not claim either was applied",
    "The diff shows no change"
   ],
@@ -2539,7 +2539,7 @@
   "rubric": [
    "Flags 'Build weekly mileage to 40 km' and 'Run one tempo session per week' as unworkable while the 10 day run ban for the left knee is in force",
    "Flags that the 'Do a 10K time trial' goal falls inside or right at the end of the ban and should move",
-   "Uses 22 Nov for the race when it talks about the timeline, not 8 Nov",
+   "Uses {RACE_NEW} for the race when it talks about the timeline, not {RACE_OLD}",
    "Changes nothing: it advises or offers, and does not complete, delete or edit any goal"
   ],
   "steps": [

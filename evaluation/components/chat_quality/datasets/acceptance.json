@@ -723,7 +723,7 @@
   ],
   "forbid_writes": true,
   "pivots_change_answer": false,
-  "evidence_notes": "source: new case. ideal: One warm line and one question, optionally two or three grounded options (for example the 22 Nov race, the plumber window), no action."
+  "evidence_notes": "source: new case. ideal: One warm line and one question, optionally two or three grounded options (for example the {RACE_NEW} race, the plumber window), no action."
  },
  {
   "id": "ACC-026",
@@ -755,7 +755,7 @@
   "message": "I'm so fed up. I missed another run, the race keeps getting further away and I think I should just quit the whole thing.",
   "rubric": [
    "Acknowledges the frustration in one plain sentence, without a lecture, a pep talk or exclamation marks",
-   "Reframes with the real facts: the physio banned running for 10 days after the left knee pain at km 6, so the missed run is within the plan, and the race is now 22 Nov",
+   "Reframes with the real facts: the physio banned running for 10 days after the left knee pain at km 6, so the missed run is within the plan, and the race is now {RACE_NEW}",
    "Offers one concrete next step that respects the ban, such as an easy swim or ride",
    "Does not push the user to run, and does not archive, complete or change the quest"
   ],
@@ -773,7 +773,7 @@
   ],
   "pivots_change_answer": true,
   "forbid_writes": true,
-  "evidence_notes": "source: new case. ideal: Short, steady, on the user's side: names the feeling once, states the ban and the 22 Nov date, suggests one knee-safe session, no changes made."
+  "evidence_notes": "source: new case. ideal: Short, steady, on the user's side: names the feeling once, states the ban and the {RACE_NEW} date, suggests one knee-safe session, no changes made."
  },
  {
   "id": "ACC-028",

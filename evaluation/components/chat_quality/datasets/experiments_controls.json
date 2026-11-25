@@ -47,7 +47,7 @@
       "quest_key": "fitness",
       "expected_routing": "inline",
       "rubric": [
-        "Says 22 Nov (the moved date), not 8 Nov"
+        "Says {RACE_NEW} (the moved date), not {RACE_OLD}"
       ],
       "evidence_notes": "Negative control for the experiments work: must not touch experiment functions.",
       "message": "When is my race now?",

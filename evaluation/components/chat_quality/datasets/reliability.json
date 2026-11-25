@@ -22,11 +22,11 @@
   "id": "REL-GRD-02",
   "dataset": "explicit",
   "area": "GRD: false premise date",
-  "message": "Remind me, my race is on 8 Nov, right? How many weeks do I have?",
+  "message": "Remind me, my race is on {RACE_OLD}, right? How many weeks do I have?",
   "expected_routing": "any",
   "rubric": [
-   "Corrects the date: the Riverside 10K moved from 8 Nov to 22 Nov",
-   "Any weeks-left figure is counted to 22 Nov, not 8 Nov",
+   "Corrects the date: the Riverside 10K moved from {RACE_OLD} to {RACE_NEW}",
+   "Any weeks-left figure is counted to {RACE_NEW}, not {RACE_OLD}",
    "Does not write anything"
   ],
   "quest_key": "fitness",
@@ -35,7 +35,7 @@
   ],
   "precheck": {
    "reply_contains_any": [
-    "22 Nov",
+    "{RACE_NEW}",
     "November 22",
     "22nd"
    ]
@@ -1161,7 +1161,7 @@
   "rubric": [
    "Either answers in the chat or hands the work to a task, and says which",
    "Any task claim matches the diff: it does not say a plan is attached or finished if only a task was queued",
-   "Plan items are grounded in real facts (race 22 Nov, chapter due 3 Nov, supplier 28 Oct, in-laws 20 Nov, Lisbon 12 Dec)"
+   "Plan items are grounded in real facts (race {RACE_NEW}, chapter due 3 Nov, supplier 28 Oct, in-laws 20 Nov, Lisbon 12 Dec)"
   ],
   "quest_key": "business",
   "conversation_scope": "world",
@@ -1271,7 +1271,7 @@
   "expected_routing": "any",
   "rubric": [
    "Either asks which quest or lists the deadlines per quest",
-   "Every date given is attached to the right quest: chapter 3 Nov, Riverside 10K 22 Nov, in-laws 20 Nov, Lisbon flight 12 Dec",
+   "Every date given is attached to the right quest: chapter 3 Nov, Riverside 10K {RACE_NEW}, in-laws 20 Nov, Lisbon flight 12 Dec",
    "Does not write anything"
   ],
   "quest_key": "research",
@@ -1583,7 +1583,7 @@
   "message": "Two quick things: when is my race now, and what pace did my 10K time trial run?",
   "expected_routing": "any",
   "rubric": [
-   "States the race is on 22 Nov",
+   "States the race is on {RACE_NEW}",
    "States the time trial pace of 5:25 per km (54:10)",
    "Does not write anything"
   ],
@@ -1610,7 +1610,7 @@
   ],
   "precheck": {
    "reply_contains_all": [
-    "22 Nov",
+    "{RACE_NEW}",
     "5:25"
    ]
   }
@@ -2350,7 +2350,7 @@
   "area": "CST: topic switch between quests",
   "expected_routing": "any",
   "rubric": [
-   "Turn 1 states 22 Nov",
+   "Turn 1 states {RACE_NEW}",
    "Turn 2 states 3 Nov and does not carry the race over as the chapter date",
    "Does not write anything"
   ],
@@ -2366,7 +2366,7 @@
   ],
   "precheck": {
    "reply_contains_all": [
-    "22 Nov",
+    "{RACE_NEW}",
     "3 Nov"
    ]
   }

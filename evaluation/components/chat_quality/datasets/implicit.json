@@ -40,9 +40,9 @@
     "message": "How many weeks do I have left to get ready for the race?",
     "expected_routing": "inline",
     "rubric": [
-      "Uses the moved race date of 22 Nov (Riverside 10K), not the original 8 Nov",
-      "The week count is right for 22 Nov counted from today's date as given in the ground truth (weeks = days to 22 Nov / 7, rounded to the nearest half week), and is NOT the count that 8 Nov would give",
-      "Does not present 8 Nov as the current race date; if 8 Nov appears at all it is labelled as the old date"
+      "Uses the moved race date of {RACE_NEW} (Riverside 10K), not the original {RACE_OLD}",
+      "The week count is right for {RACE_NEW} counted from today's date as given in the ground truth (weeks = days to {RACE_NEW} / 7, rounded to the nearest half week), and is NOT the count that {RACE_OLD} would give",
+      "Does not present {RACE_OLD} as the current race date; if {RACE_OLD} appears at all it is labelled as the old date"
     ],
     "must_use_pivots": [
       "RACE_MOVED"
@@ -50,14 +50,14 @@
     "forbid_writes": true,
     "precheck": {
       "reply_contains_any": [
-        "22 Nov",
+        "{RACE_NEW}",
         "Nov 22",
         "November 22",
         "Nov. 22",
         "2026-11-22"
       ]
     },
-    "evidence_notes": "The race note is on the fitness quest, not in a collection. Look for the fitness quest note card in used.cards. The pivot is answer-changing because the count from 8 Nov is two weeks short. Rubric item 2 is deliberately expressed against the ground truth's 'Today is ...' line rather than a fixed number of weeks, so the case does not rot the day after it was written. A reply that asks 'which race?' without checking the quest fails. The forbidden phrase '8 Nov is' was dropped on 2026-10-06 (second pass): naming the old date while correcting it ('8 Nov is no longer the date') is good behaviour and that pre-check hard-failed it, while the 22 Nov check above already catches the real error. Rubric audit 2026-10-07: added 'Nov. 22' and ISO '2026-11-22' to the hard date pre-check; this assistant often writes ISO dates, and the date is the same fact however it is spelled.",
+    "evidence_notes": "The race note is on the fitness quest, not in a collection. Look for the fitness quest note card in used.cards. The pivot is answer-changing because the count from {RACE_OLD} is two weeks short. Rubric item 2 is deliberately expressed against the ground truth's 'Today is ...' line rather than a fixed number of weeks, so the case does not rot the day after it was written. A reply that asks 'which race?' without checking the quest fails. The forbidden phrase '{RACE_OLD} is' was dropped on 2026-10-06 (second pass): naming the old date while correcting it ('{RACE_OLD} is no longer the date') is good behaviour and that pre-check hard-failed it, while the {RACE_NEW} check above already catches the real error. Rubric audit 2026-10-07: added 'Nov. 22' and ISO '2026-11-22' to the hard date pre-check; this assistant often writes ISO dates, and the date is the same fact however it is spelled.",
     "bonus_pivots": [
       "KNEE_INJURY"
     ]
@@ -74,7 +74,7 @@
       "Anchors the answer on the recorded 10K time trial of 54:10 (5:25 per km), not on a generic guess",
       "Quantifies the gap to 50:00 (about 4 minutes 10 seconds, roughly 25 seconds per km faster)",
       "Accounts for the current knee injury and running ban when judging readiness",
-      "Mentions the race date of 22 Nov as the time available (or gives a timeline consistent with it)"
+      "Mentions the race date of {RACE_NEW} as the time available (or gives a timeline consistent with it)"
     ],
     "must_use_pivots": [
       "PB_TIME_TRIAL",

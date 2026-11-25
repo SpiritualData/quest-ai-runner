@@ -256,11 +256,11 @@
       "dataset": "explicit",
       "area": "quest field outcome",
       "quest_key": "fitness",
-      "message": "Change my outcome to: Run a sub-52-minute 10K at the Riverside 10K on 22 Nov.",
+      "message": "Change my outcome to: Run a sub-52-minute 10K at the Riverside 10K on {RACE_NEW}.",
       "expected_routing": "inline",
       "rubric": [
         "The change is made by calling the quest field helper update_quest_fields (visible in the generated code or as a tool call), never by editing a file, shelling out, raw HTTP, a raw write to the quests collection, or handing the edit to a coding agent",
-        "The outcome becomes the user's statement (sub-52-minute 10K, Riverside 10K, 22 Nov) in full, not a fragment",
+        "The outcome becomes the user's statement (sub-52-minute 10K, Riverside 10K, {RACE_NEW}) in full, not a fragment",
         "Only the outcome field changes: acceptance criteria (still says under 50:00) and current state are left as they are, with at most a suggestion to align the acceptance criteria",
         "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed",
         "The reply is six sentences or fewer and adds no advice, plan or summary the user did not ask for"
@@ -282,7 +282,7 @@
             "quest_key": "fitness"
           },
           "field": "outcome",
-          "expected": "22 Nov"
+          "expected": "{RACE_NEW}"
         }
       ],
       "forbidden_side_effects": "must not change acceptance_criteria or current_state",
@@ -1419,7 +1419,7 @@
       "rubric": [
         "Reads across all five quests (world scope), not just one",
         "Names one quest as most at risk and backs it with that quest's dated facts. Business is the expected pick (the 20 Oct soft launch is already impossible because the wax now ships 28 Oct); research (methods deadline pulled forward to 3 Nov with about 3,600 words and the analysis plan still to write) is also acceptable. Any other pick fails",
-        "Every date it cites for the other quests matches the ground truth (research 3 Nov, race 22 Nov, plumber {PLUMBER}, in-laws 20 Nov, Lisbon 12 Dec); none is the stale one (8 Nov race, 15 Nov deadline)",
+        "Every date it cites for the other quests matches the ground truth (research 3 Nov, race {RACE_NEW}, plumber {PLUMBER}, in-laws 20 Nov, Lisbon 12 Dec); none is the stale one ({RACE_OLD} race, 15 Nov deadline)",
         "Does not write anything"
       ],
       "must_use_pivots": [

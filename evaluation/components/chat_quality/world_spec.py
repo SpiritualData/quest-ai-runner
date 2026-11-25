@@ -47,6 +47,13 @@ def day_range(first, last):
 # own quests, as a real runner's training log is.
 PRIVATE_QUEST_KEYS = frozenset({"fitness"})
 
+# The race stays ahead too (it moved from the old date a week out to the new one three weeks out), so a
+# "weeks left" answer is never about a date already past.
+RACE_OLD = TODAY + datetime.timedelta(days=7)
+RACE_NEW = TODAY + datetime.timedelta(days=21)
+RACE_OLD_TEXT = day_month(RACE_OLD)
+RACE_NEW_TEXT = day_month(RACE_NEW)
+
 PLUMBER_FIRST = TODAY + datetime.timedelta(days=2)
 PLUMBER_LAST = TODAY + datetime.timedelta(days=4)
 TILING_FIRST = PLUMBER_LAST + datetime.timedelta(days=1)
@@ -74,6 +81,8 @@ DATE_TOKENS = {
     else f"{day_month(TILING_FIRST)}\u2013{day_month(TILING_LAST)}",
     "TILING_LAST": day_month(TILING_LAST),
     "SAM_AWAY": SAM_AWAY_TEXT,
+    "RACE_NEW": RACE_NEW_TEXT,
+    "RACE_OLD": RACE_OLD_TEXT,
 }
 
 
@@ -102,9 +111,9 @@ PIVOTS = {
     "RACE_MOVED": {
         "quest_key": "fitness",
         "where": "fitness quest note",
-        "description": ("A quest note says the target race, the Riverside 10K, moved from 8 Nov to "
-                        "22 Nov. Any timeline, taper or 'weeks left' answer must use 22 Nov."),
-        "exact_values": {"race": "Riverside 10K", "old_date": "8 Nov", "new_date": "22 Nov"},
+        "description": (f"A quest note says the target race, the Riverside 10K, moved from {RACE_OLD_TEXT} to "
+                        f"{RACE_NEW_TEXT}. Any timeline, taper or 'weeks left' answer must use {RACE_NEW_TEXT}."),
+        "exact_values": {"race": "Riverside 10K", "old_date": RACE_OLD_TEXT, "new_date": RACE_NEW_TEXT},
     },
     "PB_TIME_TRIAL": {
         "quest_key": "fitness",
@@ -254,7 +263,7 @@ QUESTS = {
             ("Complete the October long-run block", MONTH_PERIOD, "month", "Longest run 16 km"),
         ],
         "notes": [
-            ("Race moved: the Riverside 10K is now 22 Nov instead of 8 Nov. Organisers emailed today.",
+            (f"Race moved: the Riverside 10K is now {RACE_NEW_TEXT} instead of {RACE_OLD_TEXT}. Organisers emailed today.",
              "RACE_MOVED"),
             ("Bought new shoes, 8 mm drop, felt fine on a short test.", None),
         ],
