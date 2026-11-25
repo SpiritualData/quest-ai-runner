@@ -181,7 +181,7 @@ def add_context_command(sub) -> None:
         help="show a quest's current context updates (a read: safe, repeatable, no side effects). "
              "Card-store maintenance lives under the same word: `context move-root`, "
              "`context migrate-imports`, `context merge-into`, `context store-info` (each a dry run unless --apply).")
-    ctx_p.add_argument("quest_id", help="the quest to read (e.g. quest_1625d9f47a06)")
+    ctx_p.add_argument("quest_id", nargs="?", default=None, help="the quest to read (e.g. quest_1625d9f47a06)")
     ctx_p.add_argument("--days", type=float, default=None, metavar="N",
                        help="look back N days instead of from the stored 'last looked' stamp")
     ctx_p.add_argument("--since", default=None, metavar="WHEN",
@@ -192,6 +192,9 @@ def add_context_command(sub) -> None:
                             "watches). --sources lists the vocabulary.")
     ctx_p.add_argument("--sources", action="store_true",
                        help="list the source names a quest's context_sources can use, then exit")
+    ctx_p.add_argument("--answered-asks", action="store_true", dest="answered_asks",
+                       help="list the quests with answered asks waiting for the AI and NO autopilot running (quest, count, oldest), "
+                            "then exit; read-only, creates nothing (quest_id is not needed)")
     ctx_p.add_argument("--tracked", action="store_true",
                        help="list what has been asked for on this quest and where each one got "
                             "to (the feedback ledger), then exit")

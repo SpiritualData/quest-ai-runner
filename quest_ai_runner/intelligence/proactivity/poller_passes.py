@@ -10,7 +10,7 @@ from pathlib import Path
 from datetime import date, timedelta
 
 from quest_ai_runner.intelligence.proactivity.autopilot_defaults import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES
-from quest_ai_runner.intelligence.proactivity.autopilot_pending import pending_work_for
+from quest_ai_runner.intelligence.proactivity.autopilot_pending import answered_ask_work, pending_work_for
 from quest_ai_runner.intelligence.proactivity.autopilot_units import AUTOPILOT_RUN_KIND
 from quest_ai_runner.body.internal_context.quest.client.quest_client import QuestApiError
 from quest_ai_runner.intelligence.subconscious.cards_from_files.bootstrap_reporter import (
@@ -127,6 +127,9 @@ class PassesMixin:
                     snapshot[quest_id] = {"team_id": team or self.cfg.team_id,
                                           "archived": bool(row.get("archived"))}
         opted_in = 0
+        # Answered asks waiting for the AI count as pending work for the quest's autopilot (read once per refresh; a failed read is []).
+        lister = getattr(self.client, "list_pending_answers", None)
+        answered_rows = lister() if callable(lister) else []
         # One small call for every quest's autopilot block (about 1 KB each) instead of every quest's whole state (about 80 KB
         # each, 15 quests every 5 minutes). None = an older backend: read each quest's state as before.
         schedules = None
@@ -178,7 +181,8 @@ class PassesMixin:
                 # reads it through the same ``due_trigger`` the pass's own gate does.
                 "pending_work": (lambda p: p.count if p else 0)(pending_work_for(
                     quest_id, getattr(self.cfg, "autopilot_pending_work", None),
-                    self.cfg.quest_folder_map)),
+                    self.cfg.quest_folder_map)) + (lambda p: p.count if p else 0)(
+                    answered_ask_work(quest_id, answered_rows)),
             }
             if mode in ("suggest", "act"):
                 opted_in += 1

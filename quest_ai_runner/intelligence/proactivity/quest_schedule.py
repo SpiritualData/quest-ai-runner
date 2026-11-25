@@ -34,11 +34,21 @@ def answer_rows(asks: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
     return rows
 
 
-def new_ask_since(asks: Sequence[Mapping[str, Any]], last_pass_at: Optional[str], now: Optional[datetime] = None) -> bool:
+def awaiting_ai_rows(decisions: Sequence[Mapping[str, Any]]) -> List[Dict[str, Any]]:
+    """Each ask a person answered with "have my AI act on it later" (``ai_action_status`` pending) as an event at its answer time, so a reactive
+    autopilot's next run is due until a ``done`` run settles it. Rows with no time are the oldest event (``QuestEvents``)."""
+    return [{"text": str(d.get("text") or d.get("summary") or ""), "author": "person",
+             "occurred_at": d.get("resolved_at") or d.get("answered_at") or d.get("updated_at")}
+            for d in decisions if str(d.get("ai_action_status") or "").strip().lower() == "pending"]
+
+
+def new_ask_since(asks: Sequence[Mapping[str, Any]], last_pass_at: Optional[str], now: Optional[datetime] = None,
+                  awaiting: Sequence[Mapping[str, Any]] = ()) -> bool:
     """Whether any of the quest's ``asks`` landed after its last pass, or a person answered or replied on one after it
-    (every ask counts when it has never passed): the event a reactive quest waits for."""
+    (every ask counts when it has never passed): the event a reactive quest waits for.
+    ``awaiting`` are the quest's decisions an answer left waiting for the AI (``awaiting_ai_rows``): each stays an event until a run settles it."""
     schedule = {"name": REACTIVE, "request": "autopilot pass", "event_source": SOURCE, "last_run": last_pass_at or ""}
-    rows = [dict(ask) for ask in asks] + answer_rows(asks)
+    rows = [dict(ask) for ask in asks] + answer_rows(asks) + awaiting_ai_rows(awaiting)
     events = QuestEvents(rows).pull(SOURCE, limit=len(rows))
     return bool(due(attach_events([schedule], events), now))
 
@@ -56,11 +66,11 @@ def activity_rows(updates: Sequence[Any]) -> List[Dict[str, Any]]:
 
 
 def new_activity_since(asks: Sequence[Mapping[str, Any]], activity: Sequence[Mapping[str, Any]], last_pass_at: Optional[str],
-                       now: Optional[datetime] = None) -> bool:
+                       now: Optional[datetime] = None, awaiting: Sequence[Mapping[str, Any]] = ()) -> bool:
     """Whether anything new happened on the quest after its last pass: an ask or a reply on one (``new_ask_since``), OR any activity record
     (a collection entry, a goal update, a note, a context entry, a file in the quest folder). The records join the asks as events of one source."""
     schedule = {"name": REACTIVE, "request": "autopilot pass", "event_source": SOURCE, "last_run": last_pass_at or ""}
-    rows = [dict(ask) for ask in asks] + answer_rows(asks)
+    rows = [dict(ask) for ask in asks] + answer_rows(asks) + awaiting_ai_rows(awaiting)
     events = list(QuestEvents(rows).pull(SOURCE, limit=len(rows)))
     events += [{**e, "source": SOURCE} for e in QuestActivity(activity).pull(limit=len(activity))]
     return bool(due(attach_events([schedule], events), now))

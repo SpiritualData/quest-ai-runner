@@ -93,6 +93,31 @@ def _count_indexable_files(corpus: str) -> int:
     return total
 
 
+def answered_asks_without_autopilot_report(client) -> list:
+    """``(quest_id, count, oldest)`` for quests with answered asks waiting and no autopilot running. Read-only."""
+    from quest_ai_runner.intelligence.proactivity.autopilot_pending import answered_asks_without_autopilot
+    from quest_ai_runner.intelligence.proactivity.autopilot_units import units_of
+
+    def runs(quest_id: str) -> bool:
+        listed = client.list_autopilots(quest_id) or {}
+        cfg = {**dict(listed.get("shared") or {}), "autopilots": listed.get("autopilots") or []}
+        return bool(units_of(cfg))
+
+    return answered_asks_without_autopilot(client.list_pending_answers(), runs)
+
+
+def _print_answered_asks_without_autopilot(config_path) -> int:
+    from quest_ai_runner import load_client
+    rows = answered_asks_without_autopilot_report(load_client(config_path))
+    if not rows:
+        print("Every quest with answered asks waiting for the AI has an autopilot running (or none are waiting).")
+        return 0
+    print("Answered asks waiting for the AI on quests with no autopilot running (nothing is created for them):")
+    for quest_id, count, oldest in rows:
+        print(f"  {quest_id}  {count} waiting  oldest {oldest[:10] or 'undated'}")
+    return 0
+
+
 def _cmd_context(args, log) -> int:
     """Run the `context` subcommand; returns the process exit code."""
     import json as _json
@@ -101,6 +126,11 @@ def _cmd_context(args, log) -> int:
     from quest_ai_runner.body.configuration.config import build_orchestrator
     from quest_ai_runner.body.intake_sources.context_updates import build_update_engine, collect_quest_context
 
+    if getattr(args, "answered_asks", False):
+        return _print_answered_asks_without_autopilot(getattr(args, "config", None))
+    if not args.quest_id:
+        log.error("context needs a quest id (or --answered-asks)")
+        return 2
     cfg = _config_from_env(getattr(args, "config", None))
     # Per CLAUDE.md: wrap the provider with MultiProvider before any model call. The relevance
     # judge is a model call, and unwrapped it 404s on half the model ids a deployment pins.

@@ -19,7 +19,7 @@ import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 from quest_ai_runner.intelligence.proactivity.autopilot_defaults import log
 
@@ -79,3 +79,51 @@ def pending_work_for(quest_id: str, specs: Optional[Dict[str, Any]],
         return None
     return PendingWork(count=count, label=str(spec.get("label") or "items awaiting work"),
                        source=path)
+
+
+# --- answered asks waiting for the AI ---------------------------------------------------------
+# An ask a person answered with "have my AI act on it later" (``ai_action_status`` pending) is
+# pending work for that quest's AUTOPILOT, and only for an autopilot: nothing here, or anywhere,
+# creates a task for it. A quest with no autopilot running keeps them waiting, visibly (see
+# ``answered_asks_without_autopilot``), until a person turns an autopilot on or agrees to more.
+
+ANSWERED_ASKS_LABEL = "answered asks waiting for the AI"
+
+
+def _quest_of(row: Dict[str, Any]) -> str:
+    return str(row.get("quest_id") or row.get("goal_id") or row.get("questId") or "").strip()
+
+
+def _when_of(row: Dict[str, Any]) -> str:
+    for key in ("resolved_at", "answered_at", "updated_at", "created_at"):
+        if row.get(key):
+            return str(row[key])
+    return ""
+
+
+def answered_asks_by_quest(rows: Optional[Iterable[Dict[str, Any]]]) -> Dict[str, Tuple[int, str]]:
+    """``{quest_id: (count, oldest time)}`` for the rows ``QuestClient.list_pending_answers`` returned. Read-only."""
+    found: Dict[str, Tuple[int, str]] = {}
+    for row in rows or []:
+        quest_id = _quest_of(row) if isinstance(row, dict) else ""
+        if not quest_id:
+            continue
+        count, oldest = found.get(quest_id, (0, ""))
+        when = _when_of(row)
+        found[quest_id] = (count + 1, min(filter(None, (oldest, when)), default=""))
+    return found
+
+
+def answered_ask_work(quest_id: str, rows: Optional[Iterable[Dict[str, Any]]]) -> Optional[PendingWork]:
+    """The quest's answered asks as pending work for its autopilot, or ``None`` when there are none."""
+    count, _ = answered_asks_by_quest(rows).get(quest_id, (0, ""))
+    return PendingWork(count=count, label=ANSWERED_ASKS_LABEL, source="quest asks") if count else None
+
+
+def answered_asks_without_autopilot(rows: Optional[Iterable[Dict[str, Any]]],
+                                    autopilot_runs: Callable[[str], bool]) -> List[Tuple[str, int, str]]:
+    """``(quest_id, count, oldest)`` for each quest with answered asks and no autopilot running, oldest first.
+
+    ``autopilot_runs(quest_id)`` says whether an autopilot runs there. Creates nothing."""
+    out = [(q, n, oldest) for q, (n, oldest) in answered_asks_by_quest(rows).items() if not autopilot_runs(q)]
+    return sorted(out, key=lambda t: (t[2] or "~", t[0]))

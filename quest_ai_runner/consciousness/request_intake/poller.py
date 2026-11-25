@@ -68,7 +68,6 @@ from quest_ai_runner.body.internal_context.run_store.state_store import StateSto
 
 from quest_ai_runner.intelligence.proactivity.poller_schedule import CLAIM_RETRY_COOLDOWN_SECONDS, tasks_due_now, _task_signature, dispatch_order, log
 from quest_ai_runner.intelligence.proactivity.poller_passes import PassesMixin
-from quest_ai_runner.intelligence.proactivity.poller_answers import AnswersMixin
 from quest_ai_runner.consciousness.request_intake.poller_sync import SyncMixin
 
 
@@ -95,7 +94,7 @@ __all__ = ["Poller", "StateStore"]
 
 
 
-class Poller(PassesMixin, AnswersMixin, SyncMixin):
+class Poller(PassesMixin, SyncMixin):
     def __init__(self, config: RunnerConfig, *, state_path: Optional[str] = None,
                  client: Optional[QuestClient] = None,
                  resource_guard: Optional[ResourceGuard] = None,
@@ -254,8 +253,6 @@ class Poller(PassesMixin, AnswersMixin, SyncMixin):
         # opted in. Like the folder sync above, this is light bookkeeping rather than agentic work,
         # so it runs before the resource/token gates that hold back task PICKUP.
         self._ensure_autopilot_pass()
-        # Answered asks waiting for the AI get a task that acts on them, on any quest (light, throttled).
-        self._ensure_answered_ask_tasks()
         # Monthly bootstrap report (opt-in): send a report if the corpus is ready and a month
         # has passed since the last report, or if this is the first report. Like folder sync,
         # this is light bookkeeping not gated by resource/token limits.
