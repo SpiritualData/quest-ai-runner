@@ -132,3 +132,19 @@ def test_cli_does_not_claim_nothing_waiting_on_an_unverified_read(capsys, monkey
     monkeypatch.setattr(quest_ai_runner, "load_client", lambda path: c)
     assert cli_context._print_answered_asks_without_autopilot("x") == 1
     assert "none are waiting" not in capsys.readouterr().out
+
+
+def test_all_quest_read_is_bounded_and_reuse_caches(monkeypatch):
+    monkeypatch.setattr(a, "MAX_QUESTS_PER_READ", 3)
+    a.read_cache.clear()
+
+    class Many(PerQuestClient):
+        def list_my_quests(self):
+            return [{"quest_id": f"q{i}"} for i in range(10)]
+    c = Many()
+    rows, verified = a.read_pending(c)
+    assert len(c.calls) == 3 and verified is False
+    c.calls.clear()
+    a.read_pending(c, reuse=True)
+    a.read_pending(c, reuse=True)
+    assert c.calls == []  # reuse calls are served from the earlier read

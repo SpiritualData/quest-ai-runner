@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
@@ -21,6 +23,12 @@ _NO_ACTION_LINE = re.compile(r"no[ _-]action[ _-]needed\s*:?(.*)", re.IGNORECASE
 
 # Ids whose mark-acted write failed; the next settle (any run) sends them again.
 UNSETTLED: Set[str] = set()
+
+# The all-quests read is one request per quest: bound the fan-out and reuse the answer within a pass.
+MAX_QUESTS_PER_READ = 150
+READ_WORKERS = 4
+READ_CACHE_SECONDS = 20.0
+read_cache: Dict[int, Tuple[float, Any, Tuple[Dict[str, Dict[str, Any]], bool]]] = {}
 
 NO_ACTION_MARKER = "NO ACTION NEEDED: <ask id>, <ask id>"
 
@@ -64,15 +72,21 @@ def _awaits_ai_action(row: Dict[str, Any]) -> bool:
     return rule(row)
 
 
-def read_pending(client: Any, quest_id: str = "") -> Tuple[Dict[str, Dict[str, Any]], bool]:
+def read_pending(client: Any, quest_id: str = "", reuse: bool = False) -> Tuple[Dict[str, Dict[str, Any]], bool]:
     """``({decision_id: row}, verified)`` of the caller's pending answered asks. Read-only.
 
     ``GET /api/teams/decisions`` only sees the key's own team, so the per-quest route
     (``list_decisions_for_quest``, same rule as the context updates: answered, ``ai_action_status`` pending)
-    is the main source: one request for ``quest_id``, else one per quest of ``list_my_quests``.
+    is the main source: one request for ``quest_id``, else one per quest of ``list_my_quests`` (at most ``MAX_QUESTS_PER_READ``,
+    ``READ_WORKERS`` at a time). ``reuse=True`` (callers within one pass) serves an all-quests read from the last
+    ``READ_CACHE_SECONDS``; the default always reads fresh.
     ``list_pending_answers`` is merged in as an extra source. ``verified`` is False when no read could be
     made or the quest list came back empty, so "nothing waiting" cannot be trusted.
     """
+    if reuse and not quest_id:
+        hit = read_cache.get(id(client))
+        if hit and hit[1] is client and time.monotonic() - hit[0] < READ_CACHE_SECONDS:
+            return {k: dict(v) for k, v in hit[2][0].items()}, hit[2][1]
     found: Dict[str, Dict[str, Any]] = {}
     verified = True
 
@@ -99,11 +113,24 @@ def read_pending(client: Any, quest_id: str = "") -> Tuple[Dict[str, Dict[str, A
                 mine = []
             quests = [str(q.get("quest_id") or q.get("id")) for q in mine if isinstance(q, dict) and (q.get("quest_id") or q.get("id"))]
             verified = bool(quests)
-        for q in quests:
+            if len(quests) > MAX_QUESTS_PER_READ:
+                log.warning("%d quests: reading pending asks for the first %d only", len(quests), MAX_QUESTS_PER_READ)
+                quests = quests[:MAX_QUESTS_PER_READ]
+                verified = False
+
+        def read_one(q: str) -> Tuple[str, Any, bool]:
             try:
-                add(per_quest(q), q)
+                return q, per_quest(q), True
             except Exception as e:  # noqa: BLE001 -- a read failure only means fewer ids this time
                 log.warning("could not list decisions for %s (%s)", q, e)
+                return q, None, False
+
+        with ThreadPoolExecutor(max_workers=max(1, min(READ_WORKERS, len(quests)))) as pool:
+            results = list(pool.map(read_one, quests))
+        for q, rows, ok in results:
+            if ok:
+                add(rows, q)
+            else:
                 verified = False
     else:
         verified = False
@@ -113,12 +140,14 @@ def read_pending(client: Any, quest_id: str = "") -> Tuple[Dict[str, Dict[str, A
             add(lister(), filtered=True)  # the server already filtered these
         except Exception as e:  # noqa: BLE001
             log.warning("could not list pending answered asks (%s)", e)
+    if not quest_id:
+        read_cache[id(client)] = (time.monotonic(), client, ({k: dict(v) for k, v in found.items()}, verified))
     return found, verified
 
 
-def pending_ids(client: Any, quest_id: str = "") -> Dict[str, Dict[str, Any]]:
+def pending_ids(client: Any, quest_id: str = "", reuse: bool = False) -> Dict[str, Dict[str, Any]]:
     """``{decision_id: row}`` of the caller's pending answered asks (one quest's when ``quest_id`` is given). Read-only."""
-    return read_pending(client, quest_id)[0]
+    return read_pending(client, quest_id, reuse)[0]
 
 
 def reconcile_pending_asks(client: Any, quest_ids: Optional[Sequence[str]] = None,
@@ -154,6 +183,7 @@ def reconcile_pending_asks(client: Any, quest_ids: Optional[Sequence[str]] = Non
                 cleared.append(did)
     if cleared and apply:
         try:
+            read_cache.pop(id(client), None)  # the queue is about to change
             if mark_failed(client.mark_decisions_acted(cleared)):
                 log.warning("reconcile: marking %d ask(s) acted on did not take effect", len(cleared))
                 return [], rows
