@@ -476,6 +476,8 @@ TRUE also: "can we", "could we" or "lets" followed by a NAMED piece of work to g
 moving?", "lets get the store release going"). That asks for the work to be started, even though it ends in a question mark.
 TRUE also: a message that OPENS with a command verb ("start an experiment on this quest: does X improve Y?", "add a goal ...", "create a habit ...")
 is an order even when the thing it names is itself phrased as a question; the question is the content to set up, not a request to be told.
+So "Create an experiment: does a short walk after lunch lift my afternoon energy?" is TRUE (a verb, a thing to make, then the question it should hold).
+This rule is not a case of being torn: a leading command verb plus a thing to make settles it as true.
 When you are torn, answer false. A missed directive costs the user one more sentence ("go ahead");
 a wrong one opens a task nobody asked for and reports work that was never wanted.
 
