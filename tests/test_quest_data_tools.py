@@ -309,8 +309,31 @@ def test_create_experiment_refuses_an_explicit_offer_and_passes_only_given_field
                            "linked_goal_ids": ["g1"], "user_asked_for_this_field": True},
                           ToolContext(quest_id="q1"))
     assert result.ok and "rq_new" in result.text
-    assert client.calls == [("create_experiment", "q1", "Does oat milk help?",
-                             {"linked_goal_ids": ["g1"]})]
+    assert [c for c in client.calls if c[0] == "create_experiment"] == [("create_experiment", "q1", "Does oat milk help?",
+                                                                       {"linked_goal_ids": ["g1"]})]
+
+
+def test_create_and_update_experiment_held_for_approval_are_not_reported_as_done():
+    held = {"applied": False, "pending_approval": True, "decision_id": "d9"}
+    class Held:
+        def create_experiment(self, quest_id, question, **fields):
+            return held
+        def update_experiment(self, quest_id, rid, **changes):
+            return held
+        def list_experiments(self, quest_id, **kw):
+            return []
+    made = create_quest_experiment_spec({}, client_factory=lambda: Held()).handler(
+        {"quest_id": "q1", "question": "Does a walk help?"}, ToolContext(quest_id="q1"))
+    assert made.status.value == "held" and not made.ok and "NOT created" in made.text
+    assert "Created" not in made.text
+
+
+def test_create_experiment_with_the_same_question_is_already_there_not_a_copy():
+    client = FakeQuestClient()
+    spec = create_quest_experiment_spec({}, client_factory=factory(client))
+    result = spec.handler({"quest_id": "q1", "question": "does a cold shower help my sleep"}, ToolContext(quest_id="q1"))
+    assert result.status.value == "noop" and result.ok and "Already there" in result.text
+    assert all(c[0] != "create_experiment" for c in client.calls)
 
 
 def test_update_experiment_sends_only_changed_keys_and_validates_status():

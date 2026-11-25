@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Mapping, Sequence
 from quest_ai_runner.world.tools.tools import (
     STANDARD_TOOL_BUILDERS, TOKEN_RE, ToolContext, ToolResult, ToolSpec, _NEVER_CODE, _QUEST_ID_PARAM, _quest_id, quest_client_from_env,
     quest_credentials_present, data_of, write_failed)
-from quest_ai_runner.world.tools.tools_status import ToolStatus
+from quest_ai_runner.world.tools.tools_status import ToolStatus, write_status_of
 
 # ---------------------------------------------------------------------------------------------
 # Experiments: the quest's Experiments section (research questions), read / search / create / edit
@@ -259,6 +259,18 @@ def find_quest_experiments_spec(env: Mapping[str, str], client_factory=None) -> 
     )
 
 
+def _same_question(client: Any, quest_id: str, question: str) -> Dict[str, Any]:
+    """The custom experiment on the quest whose question is the same words (case, spacing and end punctuation ignored), else {}; a failed read finds none."""
+    def key(text: Any) -> str:
+        return " ".join(re.sub(r"[^\w\s]", " ", str(text or "").lower()).split())
+    try:
+        rows = client.list_experiments(quest_id) or []
+    except Exception:  # noqa: BLE001 - a read that fails must not block the create
+        return {}
+    wanted = key(question)
+    return next((r for r in rows if isinstance(r, dict) and r.get("kind") != "default" and key(r.get("question")) == wanted), {})
+
+
 def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
     """Create one experiment through ``POST /api/quests/{id}/research-questions``."""
     factory = client_factory or (lambda: quest_client_from_env(env))
@@ -281,9 +293,18 @@ def create_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
         if hypotheses:
             fields["hypotheses"] = hypotheses
         try:
-            made = factory().create_experiment(quest_id, question, **fields)
+            client = factory()
+            same = _same_question(client, quest_id, question)
+            if same:       # one experiment per question: a repeated or retried create (or a reworded ask to edit) must not add a copy
+                return ToolResult(ok=True, status=ToolStatus.NOOP, data=same, text=(
+                    f"Already there: the experiment {question!r} exists on quest {quest_id} (id {same.get('research_question_id')}, status "
+                    f"{same.get('status')}). Nothing was created; to change it use update_quest_experiment."))
+            made = client.create_experiment(quest_id, question, **fields)
         except Exception as e:  # QuestWriteError / QuestNotConfigured: report, never raise
             return write_failed(e, "Nothing was created")
+        if write_status_of(made) is ToolStatus.HELD:      # Quest took the write and waits for a person: nothing exists yet, never say created
+            return ToolResult(ok=False, status=ToolStatus.HELD, data=data_of(made), text=(
+                f"Not applied yet: the experiment {question!r} is waiting for a person to approve it. It is NOT created."))
         made = data_of(made)
         if not made:
             return ToolResult(ok=False, status=ToolStatus.FAILED,
@@ -394,6 +415,9 @@ def update_quest_experiment_spec(env: Mapping[str, str], client_factory=None) ->
                 f"want to change it now anyway."))
         try:
             updated = factory().update_experiment(quest_id, rid, **changes) if changes else before
+            if changes and write_status_of(updated) is ToolStatus.HELD:
+                return ToolResult(ok=False, status=ToolStatus.HELD, data=data_of(updated), text=(
+                    f"Not applied yet: the change to experiment {rid} is waiting for a person to approve it. It is NOT done."))
             if note:
                 updated = data_of(factory().add_experiment_note(quest_id, rid, note)) or updated
             if reevaluation:

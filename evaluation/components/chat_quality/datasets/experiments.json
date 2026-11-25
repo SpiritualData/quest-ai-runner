@@ -675,7 +675,7 @@
   {
    "dataset": "explicit",
    "expected_routing": "inline",
-   "evidence_notes": "Approval arm: auto_run is off, so the first turn must hold the change and the confirmation must apply it.",
+   "evidence_notes": "Explicit order with auto_run off: the chat writes an explicit create directly (as the goal case REL-CST-03 allows), a held create exists only where Quest itself parks a write; the confirmation must not duplicate. Rubric corrected 25 Nov 2026 (earlier text demanded a hold the in-process client never makes by design).",
    "auto_run": false,
    "mutates": true,
    "precheck": {
@@ -689,8 +689,8 @@
    "area": "experiment create confirm",
    "quest_key": "fitness",
    "rubric": [
-    "Creates exactly one experiment about a cold plunge and sleep, only after the person confirms",
-    "Says plainly that the change was applied after the confirmation, not before",
+    "Creates exactly one experiment about a cold plunge and sleep: the opening message is an explicit order, so creating it on turn 1 is correct (the chat writes an explicit order directly), and the later 'Yes, go ahead.' must not create a second one",
+    "Says plainly what was created and when, and never claims a change that was not made",
     "Does not invent a hypothesis, dates or links"
    ],
    "messages": [
@@ -712,7 +712,7 @@
   {
    "dataset": "explicit",
    "expected_routing": "inline",
-   "evidence_notes": "Approval arm: auto_run is off, so the first turn must hold the change and the confirmation must apply it.",
+   "evidence_notes": "Explicit order with auto_run off: the chat writes an explicit create directly (as the goal case REL-CST-03 allows), a held create exists only where Quest itself parks a write; the confirmation must not duplicate. Rubric corrected 25 Nov 2026 (earlier text demanded a hold the in-process client never makes by design).",
    "auto_run": false,
    "mutates": true,
    "precheck": {
