@@ -307,6 +307,28 @@ class DecisionsMixin:
         """POST /api/teams/decisions/{id}/withdraw: take back an OPEN ask (the creator or the assignee may). Kept as history by Quest."""
         return self._write("POST", f"/api/teams/decisions/{decision_id}/withdraw", label="Withdrawing the ask")
 
+    def list_pending_answers(self) -> List[Dict[str, Any]]:
+        """GET /api/teams/decisions?ai_action_status=pending: the caller's asks answered with "don't have my AI act on it yet".
+
+        Read this BEFORE ``run_pending_answers``: that call acts on all of them at once. Best-effort: ``[]`` on any failure."""
+        try:
+            resp = self._request("GET", "/api/teams/decisions",
+                                 params={"ai_action_status": "pending", "status": "resolved", "limit": 200})
+            return list((resp or {}).get("items") or [])
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_pending_answers failed: %s", e)
+            return []
+
+    def run_pending_answers(self, quest_id: Optional[str] = None) -> WriteResult:
+        """POST /api/teams/decisions/run-pending: the app's "have my AI act on these" button.
+
+        Acts on EVERY pending answered ask of the caller (one run per quest), or only one quest's when ``quest_id`` is given.
+        An approved ask's prepared action runs directly (no AI); only declined asks or asks answered with a note start an AI
+        task, one per ask. Call ``list_pending_answers`` first and only press this when every row in it is meant to run."""
+        body: Dict[str, Any] = {"quest_id": quest_id} if quest_id else {}
+        return self._write("POST", "/api/teams/decisions/run-pending", body=body,
+                           label="Running the answered asks waiting for the AI")
+
     def list_decisions_for_quest(self, quest_id: str) -> List[Dict[str, Any]]:
         """GET every decision (open AND resolved) that references a specific quest.
 
