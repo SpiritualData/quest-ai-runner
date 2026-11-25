@@ -82,7 +82,7 @@ _FILE_SCALAR_FIELDS = {
     "rep_sync_direction",
     "quest_folder_map", "quest_folder_sync_direction", "quest_folder_zones", "quest_goal_sync",
     "quest_goal_updates_per_goal", "quest_folder_sweep_min_seconds", "heartbeat_min_seconds", "quest_folder_full_resync_seconds",
-    "autopilot_ensure_pass_task", "autopilot_pass_time", "autopilot_daily_budget",
+    "answered_asks_sweep", "autopilot_ensure_pass_task", "autopilot_pass_time", "autopilot_daily_budget",
     "autopilot_settings_refresh_seconds", "autopilot_backpressure", "autopilot_adopt_recurring", "autopilot_structure_watch",
     "autopilot_pending_work",
     "context_updates", "context_updates_state_path", "context_updates_first_look_days",
@@ -519,6 +519,8 @@ class RunnerConfig:
     # that finds an opted-in quest with no open pass task creates one.
     # Set False for a deployment where something else owns that lifecycle.
     autopilot_ensure_pass_task: bool = True
+    # Queue one task per quest that has answered asks waiting for the AI, so a run acts on and settles them (``Poller._ensure_answered_ask_tasks``).
+    answered_asks_sweep: bool = True
     # The DEFAULT daily time (the runner's local clock) for a quest that names no ``run_time`` of
     # its own. Every opted-in quest gets its own recurring pass series either way -- this only
     # decides what hour the ones that never chose fire at, so there is no second kind of pass to

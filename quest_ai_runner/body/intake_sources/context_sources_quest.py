@@ -428,7 +428,22 @@ class DecisionsSource(_BaseSource):
                          key=lambda r: str(r.get("created_at") or ""), reverse=True)[:MAX_AWAITING_ACTION]
         for row in waiting:
             out.append(self._awaiting_action_update(row, where))
-        if not request.first_look:
+        if request.first_look:
+            # Nothing was ever delivered for this quest, so the person's recent feedback (approved,
+            # declined, passed: any resolution, their own words verbatim) is offered once, newest
+            # first, so no answer is missing from the first run that reads the quest.
+            floor = request.now - timedelta(days=RECENT_RESOLVED_DAYS)
+            recent = []
+            for row in settled:
+                if _awaits_ai_action(row):
+                    continue                   # offered above, as owed action
+                when = _as_utc(row.get("resolved_at")) or _as_utc(row.get("created_at"))
+                if when is None or when >= floor:
+                    recent.append((when, row))
+            recent.sort(key=lambda w: w[0] or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+            for when, row in recent[:MAX_RECENT_RESOLVED]:
+                out.append(self._resolved_update(row, where, _as_utc(row.get("resolved_at")) or when))
+        else:
             for row in settled:
                 if _awaits_ai_action(row):
                     continue                   # offered above, as owed action
@@ -502,7 +517,11 @@ class DecisionsSource(_BaseSource):
         if row.get("auto_resolved") and not row.get("resolved_by_name"):
             outcome = "resolved automatically at its deadline"
         else:
-            outcome = f"resolved as {resolution or 'answered'}"
+            plain = {"approve": "approved", "approved": "approved", "decline": "declined",
+                     "declined": "declined", "reject": "declined", "rejected": "declined",
+                     "pass": "passed on", "passed": "passed on"}.get(resolution.lower())
+            outcome = (f"{plain}, resolved as {resolution}" if plain
+                       else f"resolved as {resolution or 'answered'}")
         return ContextUpdate(
             source="decisions",
             kind="resolved ask",
@@ -522,6 +541,9 @@ class DecisionsSource(_BaseSource):
 # Answered asks still waiting on the AI, offered per look. Generous on purpose: the point of
 # deferring is answering a batch (ten asks on one quest) and having them read together.
 MAX_AWAITING_ACTION = 25
+# First look at a quest: resolved asks of any resolution from this many days back, at most this many.
+RECENT_RESOLVED_DAYS = 30
+MAX_RECENT_RESOLVED = 25
 
 
 def _awaits_ai_action(row: Dict[str, Any]) -> bool:

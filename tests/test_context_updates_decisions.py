@@ -136,15 +136,35 @@ def test_a_resolved_ask_answered_before_the_last_look_is_history_not_news():
     assert _rows(bundle) == []
 
 
-def test_a_first_look_offers_open_asks_but_never_the_settled_history():
+def test_a_first_look_offers_open_asks_and_recent_answers_of_any_resolution_newest_first():
     client = DecisionsClient([
         _decision("open1"),
-        _decision("done1", status="resolved", resolution="approve", resolved_at=_iso(hours_ago=3)),
+        _decision("ok", status="resolved", resolution="approve", resolved_at=_iso(days_ago=5)),
+        _decision("no", status="resolved", resolution="decline", response_text="Not now, too pricey",
+                  resolved_at=_iso(hours_ago=3)),
+        _decision("skip", status="resolved", resolution="pass", resolved_at=_iso(days_ago=9)),
+        _decision("old", status="resolved", resolution="approve", resolved_at=_iso(days_ago=90)),
     ])
 
     bundle = _engine(client).collect({"quest_id": "q1"}, card_id="q1")
 
-    assert [u.item_id for u in _rows(bundle)] == ["open1"]
+    rows = _rows(bundle)
+    assert [u.item_id for u in rows if u.kind == "resolved ask"] == ["no", "ok", "skip"]
+    assert "open1" in [u.item_id for u in rows]
+    declined = next(u for u in rows if u.item_id == "no")
+    assert declined.verbatim and "Not now, too pricey" in declined.body and "declined" in declined.title
+
+
+def test_a_first_look_caps_recent_resolved_asks():
+    from quest_ai_runner.body.intake_sources.context_sources_quest import MAX_RECENT_RESOLVED
+    from quest_ai_runner.body.intake_sources.context_update_types import MAX_UPDATES
+    client = DecisionsClient([
+        _decision(f"r{i}", status="resolved", resolution="approve", resolved_at=_iso(hours_ago=i + 1))
+        for i in range(MAX_RECENT_RESOLVED + 5)])
+
+    rows = _rows(_engine(client).collect({"quest_id": "q1"}, card_id="q1"))
+
+    assert len(rows) == min(MAX_RECENT_RESOLVED, MAX_UPDATES) and rows[0].item_id == "r0"
 
 
 def test_an_auto_resolved_ask_says_it_was_resolved_at_its_deadline():
