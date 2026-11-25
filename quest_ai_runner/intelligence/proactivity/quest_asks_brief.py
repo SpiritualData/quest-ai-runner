@@ -57,6 +57,15 @@ CLOSE_OUT_RULE = ("Before you finish this run, call update_ask on every ask you 
                   "Never finish a run with an ask you acted on still open.")
 
 
+#: The answered-asks clear-out section: how many asks it lists, and the characters of each answer.
+MAX_ANSWERED_ASKS = 12
+ANSWERED_TEXT_LIMIT = 300
+ANSWERED_HEADER = ("ANSWERED ASKS TO CLEAR. People answered these asks on this quest and they are not yet acted on. "
+                   "Act on each one in this run, then name its id (teamdec_...) in your result. If an ask needs "
+                   "no action, write a line `NO ACTION NEEDED: <id> <reason>`. Until every id here is named or "
+                   "marked, they come back at the start of every run.")
+
+
 def fetch_asks(client: Any, quest_id: str) -> Optional[List[Dict[str, Any]]]:
     """The quest's ask rows, or ``None`` when they could not be read. Never raises."""
     lister = getattr(client, "list_asks", None)
@@ -250,3 +259,28 @@ def asks_brief_section(asks: Optional[List[Dict[str, Any]]],
         lines += capped((waiting_entry(r) for r in waiting_in_order(decisions, when)), MAX_WAITING)
     text = "\n".join(lines)
     return text if len(text) <= max_chars else text[:max_chars - 3].rstrip() + "..."
+
+
+def answered_asks_section(client: Any, quest_id: str) -> str:
+    """The clear-out instruction for this quest's answered asks that are not yet acted on, or ``""`` when there are none.
+
+    Built from a live read each run (``ask_settling.pending_ids``: pending, resolved, this quest only), never a
+    cached flag, so it ends by itself once the last ask is marked acted on. Parked-action approvals are left
+    alone (Quest runs them). A failed read renders nothing, like the other sections.
+    """
+    from quest_ai_runner.body.intake_sources import ask_settling
+    rows = [r for did, r in ask_settling.pending_ids(client, quest_id).items()
+            if str(r.get("quest_id") or "") == quest_id and not r.get("ai_action_parked")]
+    if not rows:
+        return ""
+    rows.sort(key=lambda r: str(r.get("resolved_at") or ""))
+    lines = [ANSWERED_HEADER, ""]
+    for r in rows[:MAX_ANSWERED_ASKS]:
+        who = str(r.get("resolved_by_name") or r.get("assignee_name") or "").strip()
+        said = str(r.get("response_text") or "").strip() or str(r.get("resolution") or "answered")
+        lines.append(f"- {r.get('decision_id')}: {one_line(r.get('summary'), 140)} | "
+                     + (f"{who} " if who else "") + f"answered ({r.get('resolution') or 'answered'}): "
+                     + one_line(said, ANSWERED_TEXT_LIMIT))
+    if len(rows) > MAX_ANSWERED_ASKS:
+        lines.append(f"- +{len(rows) - MAX_ANSWERED_ASKS} more (the rest come back next run)")
+    return "\n".join(lines)

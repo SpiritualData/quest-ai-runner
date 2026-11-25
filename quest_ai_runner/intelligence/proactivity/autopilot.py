@@ -54,7 +54,7 @@ from quest_ai_runner.intelligence.proactivity.autopilot_result import RUN_BRIEF_
 from quest_ai_runner.intelligence.proactivity.autopilot_budget_ask import budget_stop_escalation
 from quest_ai_runner.intelligence.proactivity.autopilot_gates import GatesMixin
 from quest_ai_runner.intelligence.proactivity.autopilot_work import WorkMixin
-from quest_ai_runner.intelligence.proactivity.quest_asks_brief import asks_brief_section, fetch_open_decisions
+from quest_ai_runner.intelligence.proactivity.quest_asks_brief import answered_asks_section, asks_brief_section, fetch_open_decisions
 from quest_ai_runner.intelligence.higher_mind.objectives.quest_experiments import (
     experiments_brief_section, fetch_experiments, has_experiment, proposal_is_open)
 from quest_ai_runner.intelligence.proactivity.autopilot_context import PassContextMixin
@@ -461,6 +461,10 @@ class AutopilotPass(GatesMixin, WorkMixin, PassContextMixin):
         # What people asked of the AI on this quest (and what already waits on a person), read ONCE per quest and rendered per batch.
         asked_text = asks_brief_section(self.quest_asks(quest_id),
                                         fetch_open_decisions(self._client, quest_id)) or None
+        # Live read every run (never cached): the clear-out instruction exists only while this quest has answered asks not yet acted on.
+        answered_text = answered_asks_section(self._client, quest_id)
+        if answered_text:
+            asked_text = f"{asked_text}\n\n{answered_text}" if asked_text else answered_text
         quest_label = _quest_label(quest, quest_id)
         bundle: Optional[ContextUpdates] = None
         context_updates_text: Optional[str] = None
