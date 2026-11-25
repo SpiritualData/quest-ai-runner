@@ -434,3 +434,15 @@ def test_planner_prompt_advice_shape_excludes_definition_questions():
     from quest_ai_runner.intelligence.mind.planner import planner_prompt as pp
     text = "".join(str(v) for v in vars(pp).values() if isinstance(v, str))
     assert "never a question about what a word means or how two terms differ" in text
+
+
+def test_planner_prompt_reads_records_for_a_floated_plan():
+    from quest_ai_runner.intelligence.mind.planner import planner_prompt as pp
+    text = "".join(str(v) for v in vars(pp).values() if isinstance(v, str))
+    assert "a plan they announce or float" in text
+
+
+def test_planner_prompt_never_endorses_a_floated_plan_unread():
+    from quest_ai_runner.intelligence.mind.planner import planner_prompt as pp
+    text = "".join(str(v) for v in vars(pp).values() if isinstance(v, str))
+    assert "never endorse the plan or ask what distance or time before you have" in text
