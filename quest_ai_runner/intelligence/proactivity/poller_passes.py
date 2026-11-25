@@ -129,7 +129,11 @@ class PassesMixin:
         opted_in = 0
         # Answered asks waiting for the AI count as pending work for the quest's autopilot (read once per refresh; a failed read is []).
         lister = getattr(self.client, "list_pending_answers", None)
-        answered_rows = lister() if callable(lister) else []
+        try:
+            answered_rows = lister() if callable(lister) else []
+        except Exception:  # noqa: BLE001 -- one backend hiccup must not abort every quest's snapshot
+            log.info("autopilot: pending-answers read failed; treating as none", exc_info=True)
+            answered_rows = []
         # One small call for every quest's autopilot block (about 1 KB each) instead of every quest's whole state (about 80 KB
         # each, 15 quests every 5 minutes). None = an older backend: read each quest's state as before.
         schedules = None
